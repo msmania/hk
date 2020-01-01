@@ -2,8 +2,8 @@
 
 struct ConfigInternal final : GlobalConfig {
   void Init();
-  bool IsEnabled(const char *target) const;
-  bool IsEnabled(const UNICODE_STRING &target);
+  bool IsProcessEnabled(const char *target) const;
+  bool IsImageEnabled(const UNICODE_STRING &target);
 };
 
 extern ConfigInternal gConfig;

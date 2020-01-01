@@ -54,3 +54,32 @@ const char *EProcess::ProcessName() const {
 void *EProcess::SectionBase() const {
   return *at<void* const*>(obj_, 0x3c8);
 }
+
+EThread::EThread(HANDLE tid) : obj_{} {
+  NTSTATUS status = PsLookupThreadByThreadId(tid, &obj_);
+  if (!NT_SUCCESS(status))  {
+    Log("PsLookupThreadByThreadId failed - %08x\n", status);
+    obj_ = nullptr;
+  }
+}
+
+EThread::~EThread() {
+  if (obj_) ObDereferenceObject(obj_);
+}
+
+EThread::operator bool() const {
+  return !!obj_;
+}
+
+int EThread::CountThreadList() const {
+  int n = 0;
+  auto p = at<PLIST_ENTRY>(obj_, 0x2f8)->Flink;
+  for (;;) {
+    ++n;
+    if (n > 0xffff) return -1; // something wrong
+    auto thread = at<void*>(p, -0x2f8);
+    if (thread == obj_) break;
+    p = p->Flink;
+  }
+  return n - 1;
+}

@@ -29,15 +29,8 @@ void Log(const char* format, ...) {
   va_end(va);
 }
 
-void Callback_CreateProcess(HANDLE ParentId,
-                            HANDLE ProcessId,
-                            BOOLEAN Create) {
-  if (!Create) return;
-
+static void PopulateProcess(HANDLE ProcessId) {
   EProcess eproc(ProcessId);
-  if (!eproc) return;
-
-  if (!gConfig.IsEnabled(eproc.ProcessName())) return;
 
   KAPC_STATE state;
   KeStackAttachProcess(eproc, &state);
@@ -51,17 +44,78 @@ void Callback_CreateProcess(HANDLE ParentId,
   KeUnstackDetachProcess(&state);
 }
 
+void Callback_CreateProcess(HANDLE ParentId,
+                            HANDLE ProcessId,
+                            BOOLEAN Create) {
+  if (!Create) return;
+
+  EProcess eproc(ProcessId);
+  if (!eproc) return;
+
+  if (!gConfig.IsProcessEnabled(eproc.ProcessName())) return;
+
+  Log("CP: %x --> %x\n",
+      reinterpret_cast<uint32_t>(ParentId),
+      reinterpret_cast<uint32_t>(ProcessId));
+
+  if (gConfig.mode_ == GlobalConfig::Mode::Trace) return;
+
+  if (gConfig.mode_ == GlobalConfig::Mode::CP) {
+    PopulateProcess(ProcessId);
+  }
+}
+
+void Callback_CreateThread(HANDLE ProcessId,
+                           HANDLE ThreadId,
+                           BOOLEAN Create) {
+  if (!Create) return;
+
+  EProcess eproc(ProcessId);
+  if (!eproc) return;
+
+  if (!gConfig.IsProcessEnabled(eproc.ProcessName())) return;
+
+  if (gConfig.mode_ != GlobalConfig::Mode::Trace
+      && gConfig.mode_ != GlobalConfig::Mode::CT)
+    return;
+
+  if (gConfig.mode_ == GlobalConfig::Mode::CT) {
+    EThread ethread(ThreadId);
+    if (ethread.CountThreadList() != 1) return;
+  }
+
+  Log("CT: %x.%x\n",
+      reinterpret_cast<uint32_t>(ProcessId),
+      reinterpret_cast<uint32_t>(ThreadId));
+
+  if (gConfig.mode_ == GlobalConfig::Mode::Trace) return;
+
+  PopulateProcess(ProcessId);
+}
+
 void Callback_LoadImage(PUNICODE_STRING FullImageName,
                         HANDLE ProcessId,
                         PIMAGE_INFO ImageInfo) {
-  if (!gConfig.IsEnabled(*FullImageName)) return;
+  EProcess eproc(ProcessId);
+  if (!eproc) return;
 
-  Log("LI: %ls\n", FullImageName->Buffer);
+  if (!gConfig.IsProcessEnabled(eproc.ProcessName())) return;
+
+  if (gConfig.mode_ != GlobalConfig::Mode::Trace
+      && !gConfig.IsImageEnabled(*FullImageName))
+    return;
+
+  Log("LI:%5x %ls\n",
+      reinterpret_cast<uint32_t>(ProcessId),
+      FullImageName->Buffer);
+
+  if (gConfig.mode_ == GlobalConfig::Mode::Trace) return;
 
   PEImage pe(ImageInfo->ImageBase);
   if (!pe) return;
   Process proc(ProcessId, GENERIC_ALL);
   if (!proc) return;
+
   pe.UpdateImportDirectory(proc);
 }
 
@@ -79,13 +133,12 @@ NTSTATUS HkDispatchRoutine(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
     break;
   case IRP_MJ_DEVICE_CONTROL:
     switch (IrpStack->Parameters.DeviceIoControl.IoControlCode) {
-    case IOCTL_SETLI:
-      if (IrpStack->Parameters.DeviceIoControl.InputBufferLength <= sizeof(gConfig.targetForLI_)
-          && Irp->AssociatedIrp.SystemBuffer) {
-        gConfig.mode_ = GlobalConfig::Mode::LI;
-        memcpy(gConfig.targetForLI_,
-               Irp->AssociatedIrp.SystemBuffer,
-               IrpStack->Parameters.DeviceIoControl.InputBufferLength);
+    case IOCTL_GETINFO:
+      if (IrpStack->Parameters.DeviceIoControl.OutputBufferLength >= sizeof(gConfig)) {
+        if (auto p = reinterpret_cast<GlobalConfig*>(Irp->AssociatedIrp.SystemBuffer)) {
+          *p = gConfig;
+          Irp->IoStatus.Information = sizeof(gConfig);
+        }
       }
       break;
     case IOCTL_SETINJECTEE:
@@ -96,21 +149,40 @@ NTSTATUS HkDispatchRoutine(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
                IrpStack->Parameters.DeviceIoControl.InputBufferLength);
       }
       break;
-    case IOCTL_SETCP:
-      if (IrpStack->Parameters.DeviceIoControl.InputBufferLength <= sizeof(gConfig.targetForCP_)
+    case IOCTL_SETTRACE:
+      if (IrpStack->Parameters.DeviceIoControl.InputBufferLength <= sizeof(gConfig.targetProcess_)
           && Irp->AssociatedIrp.SystemBuffer) {
-        gConfig.mode_ = GlobalConfig::Mode::CP;
-        memcpy(gConfig.targetForCP_,
+        gConfig.mode_ = GlobalConfig::Mode::Trace;
+        memcpy(gConfig.targetProcess_,
                Irp->AssociatedIrp.SystemBuffer,
                IrpStack->Parameters.DeviceIoControl.InputBufferLength);
       }
       break;
-    case IOCTL_GETINFO:
-      if (IrpStack->Parameters.DeviceIoControl.OutputBufferLength >= sizeof(gConfig)) {
-        if (auto p = reinterpret_cast<GlobalConfig*>(Irp->AssociatedIrp.SystemBuffer)) {
-          *p = gConfig;
-          Irp->IoStatus.Information = sizeof(gConfig);
-        }
+    case IOCTL_SETLI:
+      if (IrpStack->Parameters.DeviceIoControl.InputBufferLength <= sizeof(gConfig.targetImage_)
+          && Irp->AssociatedIrp.SystemBuffer) {
+        gConfig.mode_ = GlobalConfig::Mode::LI;
+        memcpy(gConfig.targetImage_,
+               Irp->AssociatedIrp.SystemBuffer,
+               IrpStack->Parameters.DeviceIoControl.InputBufferLength);
+      }
+      break;
+    case IOCTL_SETCP:
+      if (IrpStack->Parameters.DeviceIoControl.InputBufferLength <= sizeof(gConfig.targetProcess_)
+          && Irp->AssociatedIrp.SystemBuffer) {
+        gConfig.mode_ = GlobalConfig::Mode::CP;
+        memcpy(gConfig.targetProcess_,
+               Irp->AssociatedIrp.SystemBuffer,
+               IrpStack->Parameters.DeviceIoControl.InputBufferLength);
+      }
+      break;
+    case IOCTL_SETCT:
+      if (IrpStack->Parameters.DeviceIoControl.InputBufferLength <= sizeof(gConfig.targetProcess_)
+          && Irp->AssociatedIrp.SystemBuffer) {
+        gConfig.mode_ = GlobalConfig::Mode::CT;
+        memcpy(gConfig.targetProcess_,
+               Irp->AssociatedIrp.SystemBuffer,
+               IrpStack->Parameters.DeviceIoControl.InputBufferLength);
       }
       break;
     }
@@ -161,6 +233,12 @@ NTSTATUS DriverEntry(_In_ PDRIVER_OBJECT DriverObject,
     goto cleanup;
   }
 
+  status = PsSetCreateThreadNotifyRoutine(Callback_CreateThread);
+  if (!NT_SUCCESS(status)) {
+    Log("PsSetCreateThreadNotifyRoutine failed - %08x\n", status);
+    goto cleanup;
+  }
+
   status = PsSetLoadImageNotifyRoutine(Callback_LoadImage);
   if (!NT_SUCCESS(status)) {
     Log("PsSetLoadImageNotifyRoutine failed - %08x\n", status);
@@ -179,6 +257,7 @@ cleanup:
 VOID DriverUnload(_In_ PDRIVER_OBJECT DriverObject) {
   PAGED_CODE();
   PsRemoveLoadImageNotifyRoutine(Callback_LoadImage);
+  PsRemoveCreateThreadNotifyRoutine(Callback_CreateThread);
   PsSetCreateProcessNotifyRoutine(Callback_CreateProcess, /*Remove*/TRUE);
 
   UNICODE_STRING linkName;

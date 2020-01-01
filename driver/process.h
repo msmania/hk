@@ -21,3 +21,13 @@ public:
   const char *ProcessName() const;
   void *SectionBase() const;
 };
+
+class EThread final {
+  PETHREAD obj_;
+
+public:
+  EThread(HANDLE Tid);
+  ~EThread();
+  operator bool() const;
+  int CountThreadList() const;
+};
