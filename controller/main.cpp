@@ -26,8 +26,7 @@ public:
   }
 
   operator bool() const {
-    //return device_ != INVALID_HANDLE_VALUE;
-    return true;
+    return device_ != INVALID_HANDLE_VALUE;
   }
 
   void GetInfo() const {
