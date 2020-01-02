@@ -71,6 +71,10 @@ EThread::operator bool() const {
   return !!obj_;
 }
 
+EThread::operator PKTHREAD() {
+  return obj_;
+}
+
 int EThread::CountThreadList() const {
   int n = 0;
   auto p = at<PLIST_ENTRY>(obj_, 0x2f8)->Flink;

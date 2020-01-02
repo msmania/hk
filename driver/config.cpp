@@ -15,7 +15,7 @@ bool ConfigInternal::IsProcessEnabled(const char *target) const {
 }
 
 bool ConfigInternal::IsImageEnabled(const UNICODE_STRING &target) {
-  if (mode_ != Mode::LI) return false;
+  if (mode_ == Mode::Uninitialized) return false;
 
   uint16_t stringLen = static_cast<uint16_t>(wcslen(targetImage_) * sizeof(wchar_t));
   uint16_t bufferLen = stringLen + sizeof(wchar_t);

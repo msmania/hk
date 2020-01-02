@@ -29,5 +29,6 @@ public:
   EThread(HANDLE Tid);
   ~EThread();
   operator bool() const;
+  operator PKTHREAD();
   int CountThreadList() const;
 };

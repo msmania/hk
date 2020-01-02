@@ -54,9 +54,10 @@ void Callback_CreateProcess(HANDLE ParentId,
 
   if (!gConfig.IsProcessEnabled(eproc.ProcessName())) return;
 
-  Log("CP: %x --> %x\n",
+  Log("CP: %x --> %x %p\n",
       reinterpret_cast<uint32_t>(ParentId),
-      reinterpret_cast<uint32_t>(ProcessId));
+      reinterpret_cast<uint32_t>(ProcessId),
+      eproc);
 
   if (gConfig.mode_ == GlobalConfig::Mode::Trace) return;
 
@@ -79,18 +80,21 @@ void Callback_CreateThread(HANDLE ProcessId,
       && gConfig.mode_ != GlobalConfig::Mode::CT)
     return;
 
+  EThread ethread(ThreadId);
   if (gConfig.mode_ == GlobalConfig::Mode::CT) {
-    EThread ethread(ThreadId);
     if (ethread.CountThreadList() != 1) return;
   }
 
-  Log("CT: %x.%x\n",
+  Log("CT: %x.%x %p\n",
       reinterpret_cast<uint32_t>(ProcessId),
-      reinterpret_cast<uint32_t>(ThreadId));
+      reinterpret_cast<uint32_t>(ThreadId),
+      ethread);
 
   if (gConfig.mode_ == GlobalConfig::Mode::Trace) return;
 
-  PopulateProcess(ProcessId);
+  if (gConfig.mode_ == GlobalConfig::Mode::CT) {
+    PopulateProcess(ProcessId);
+  }
 }
 
 void Callback_LoadImage(PUNICODE_STRING FullImageName,
@@ -111,12 +115,9 @@ void Callback_LoadImage(PUNICODE_STRING FullImageName,
 
   if (gConfig.mode_ == GlobalConfig::Mode::Trace) return;
 
-  PEImage pe(ImageInfo->ImageBase);
-  if (!pe) return;
-  Process proc(ProcessId, GENERIC_ALL);
-  if (!proc) return;
-
-  pe.UpdateImportDirectory(proc);
+  if (gConfig.mode_ == GlobalConfig::Mode::LI) {
+    PopulateProcess(ProcessId);
+  }
 }
 
 NTSTATUS HkDispatchRoutine(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
