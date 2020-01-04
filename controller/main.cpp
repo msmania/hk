@@ -165,6 +165,8 @@ public:
   }
 
   void SetLI(const char *newTarget) const {
+    SetCP(newTarget);
+
     GlobalConfig config;
     int convertedChars = MultiByteToWideChar(
       CP_OEMCP,
