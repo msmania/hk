@@ -48,7 +48,17 @@ EProcess::operator PKPROCESS() {
 }
 
 const char *EProcess::ProcessName() const {
-  return at<const char*>(obj_, 0x450);
+  UNICODE_STRING name;
+  RtlInitUnicodeString(&name, L"PsGetProcessImageFileName");
+  auto PsGetProcessImageFileName =
+    reinterpret_cast<const char*(NTAPI*)(PEPROCESS)>(
+      MmGetSystemRoutineAddress(&name));
+  if (!PsGetProcessImageFileName) {
+    Log("PsGetProcessImageFileName does not exist.\n");
+    return nullptr;
+  }
+
+  return PsGetProcessImageFileName(obj_);
 }
 
 void *EProcess::SectionBase() const {

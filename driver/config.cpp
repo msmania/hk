@@ -11,6 +11,7 @@ void ConfigInternal::Init() {
 
 bool ConfigInternal::IsProcessEnabled(const char *target) const {
   return mode_ != Mode::Uninitialized
+         && target
          && _stricmp(targetProcess_, target) == 0;
 }
 
