@@ -32,3 +32,36 @@ bool ConfigInternal::IsImageEnabled(const UNICODE_STRING &target) {
   return RtlEqualUnicodeString(&current, &targetUstr,
                                /*CaseInSensitive*/TRUE);
 }
+
+bool ConfigInternal::Import(const void *buffer, uint32_t bufferSize) {
+  if (!buffer || bufferSize != sizeof(Payload))
+    return false;
+
+  const auto &payload = *reinterpret_cast<const Payload*>(buffer);
+  const auto &config = payload.config_;
+
+  if (payload.flags_ & Payload::Mode)
+    mode_ = config.mode_;
+
+  if (payload.flags_ & Payload::Injectee)
+    memcpy(injectee_, config.injectee_, sizeof(injectee_));
+
+  if (payload.flags_ & Payload::TargetProcess)
+    memcpy(targetProcess_, config.targetProcess_, sizeof(targetProcess_));
+
+  if (payload.flags_ & Payload::TargetImage)
+    memcpy(targetImage_, config.targetImage_, sizeof(targetImage_));
+
+  return true;
+}
+
+uint32_t ConfigInternal::Export(void *buffer, uint32_t bufferSize) const {
+  if (bufferSize >= sizeof(Payload)) {
+    if (auto payload = reinterpret_cast<Payload*>(buffer)) {
+      payload->flags_ = 0;
+      payload->config_ = gConfig;
+      return sizeof(Payload);
+    }
+  }
+  return 0;
+}

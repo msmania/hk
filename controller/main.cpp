@@ -7,6 +7,43 @@
 class HkDriver final {
   HANDLE device_;
 
+  Payload Receive() const {
+    DWORD dw;
+    Payload payload = {};
+    if (DeviceIoControl(device_,
+                         IOCTL_RECV,
+                         /*lpInBuffer*/nullptr,
+                         /*nInBufferSize*/0,
+                         /*lpOutBuffer*/&payload,
+                         /*nOutBufferSize*/sizeof(payload),
+                         /*lpBytesReturned*/&dw,
+                         /*lpOverlapped*/nullptr)
+        && dw == sizeof(payload)) {
+      payload.flags_ = 1;
+    }
+    else {
+      printf("DeviceIoControl failed - %08lx\n", GetLastError());
+      payload.flags_ = 0;
+    }
+    return payload;
+  }
+
+  bool Send(Payload &payload) const {
+    DWORD dw;
+    if (!DeviceIoControl(device_,
+                         IOCTL_SEND,
+                         /*lpInBuffer*/&payload,
+                         /*nInBufferSize*/sizeof(payload),
+                         /*lpOutBuffer*/nullptr,
+                         /*nOutBufferSize*/0,
+                         /*lpBytesReturned*/&dw,
+                         /*lpOverlapped*/nullptr)) {
+      printf("DeviceIoControl failed - %08lx\n", GetLastError());
+      return false;
+    }
+    return true;
+  }
+
 public:
   HkDriver() {
     device_ = CreateFile(DEVICE_NAME_U,
@@ -30,54 +67,46 @@ public:
   }
 
   void GetInfo() const {
-    DWORD dw;
-    GlobalConfig config;
-    if (!DeviceIoControl(device_,
-                         IOCTL_GETINFO,
-                         /*lpInBuffer*/nullptr,
-                         /*nInBufferSize*/0,
-                         /*lpOutBuffer*/&config,
-                         /*nOutBufferSize*/sizeof(config),
-                         /*lpBytesReturned*/&dw,
-                         /*lpOverlapped*/nullptr)) {
-      printf("DeviceIoControl failed - %08lx\n", GetLastError());
-    }
-  
-    switch (config.mode_) {
-    default:
-      printf("Not activated\n");
-      break;
-    case GlobalConfig::Mode::Trace:
-      printf("Mode:     Trace\n"
-             "Target:   %hs\n",
-             config.targetProcess_);
-      break;
-    case GlobalConfig::Mode::LI:
-      printf("Mode:     LoadImage\n"
-             "Target:   %ls\n"
-             "Injectee: %hs\n",
-             config.targetImage_,
-             config.injectee_);
-      break;
-    case GlobalConfig::Mode::CP:
-      printf("Mode:     CreateProcess\n"
-             "Target:   %hs\n"
-             "Injectee: %hs\n",
-             config.targetProcess_,
-             config.injectee_);
-      break;
-    case GlobalConfig::Mode::CT:
-      printf("Mode:     CreateThread\n"
-             "Target:   %hs\n"
-             "Injectee: %hs\n",
-             config.targetProcess_,
-             config.injectee_);
-      break;
+    auto payload = Receive();
+    if (payload.flags_) {
+      const auto &config = payload.config_;
+      switch (config.mode_) {
+      default:
+        printf("Not activated\n");
+        break;
+      case GlobalConfig::Mode::Trace:
+        printf("Mode:     Trace\n"
+               "Target:   %hs\n",
+               config.targetProcess_);
+        break;
+      case GlobalConfig::Mode::LI:
+        printf("Mode:     LoadImage\n"
+               "Target:   %ls\n"
+               "Injectee: %hs\n",
+               config.targetImage_,
+               config.injectee_);
+        break;
+      case GlobalConfig::Mode::CP:
+        printf("Mode:     CreateProcess\n"
+               "Target:   %hs\n"
+               "Injectee: %hs\n",
+               config.targetProcess_,
+               config.injectee_);
+        break;
+      case GlobalConfig::Mode::CT:
+        printf("Mode:     CreateThread\n"
+               "Target:   %hs\n"
+               "Injectee: %hs\n",
+               config.targetProcess_,
+               config.injectee_);
+        break;
+      }
     }
   }
 
   void SetInjectee(const char *newTarget) const {
-    GlobalConfig config;
+    Payload payload = {Payload::Injectee};
+    auto &config = payload.config_;
 
     auto bufferLen = static_cast<uint32_t>(strlen(newTarget) + sizeof(char));
     if (bufferLen > sizeof(config.injectee_))
@@ -85,89 +114,34 @@ public:
 
     memcpy(config.injectee_, newTarget, bufferLen);
 
-    DWORD dw;
-    if (!DeviceIoControl(device_,
-                         IOCTL_SETINJECTEE,
-                         /*lpInBuffer*/config.injectee_,
-                         /*nInBufferSize*/bufferLen,
-                         /*lpOutBuffer*/nullptr,
-                         /*nOutBufferSize*/0,
-                         /*lpBytesReturned*/&dw,
-                         /*lpOverlapped*/nullptr)) {
-      printf("DeviceIoControl failed - %08lx\n", GetLastError());
-    }
+    Send(payload);
   }
 
-  void SetTrace(const char *newTarget) const {
-    GlobalConfig config;
+  void SetHookForProcess(const char *newTarget, GlobalConfig::Mode mode) const {
+    Payload payload = {Payload::Mode | Payload::TargetProcess};
+    auto &config = payload.config_;
 
     auto bufferLen = static_cast<uint32_t>(strlen(newTarget) + sizeof(char));
     if (bufferLen > sizeof(config.targetProcess_))
       return;
 
+    config.mode_ = mode;
     memcpy(config.targetProcess_, newTarget, bufferLen);
 
-    DWORD dw;
-    if (!DeviceIoControl(device_,
-                         IOCTL_SETTRACE,
-                         /*lpInBuffer*/config.targetProcess_,
-                         /*nInBufferSize*/bufferLen,
-                         /*lpOutBuffer*/nullptr,
-                         /*nOutBufferSize*/0,
-                         /*lpBytesReturned*/&dw,
-                         /*lpOverlapped*/nullptr)) {
-      printf("DeviceIoControl failed - %08lx\n", GetLastError());
-    }
-  }
-
-  void SetCP(const char *newTarget) const {
-    GlobalConfig config;
-
-    auto bufferLen = static_cast<uint32_t>(strlen(newTarget) + sizeof(char));
-    if (bufferLen > sizeof(config.targetProcess_))
-      return;
-
-    memcpy(config.targetProcess_, newTarget, bufferLen);
-
-    DWORD dw;
-    if (!DeviceIoControl(device_,
-                         IOCTL_SETCP,
-                         /*lpInBuffer*/config.targetProcess_,
-                         /*nInBufferSize*/bufferLen,
-                         /*lpOutBuffer*/nullptr,
-                         /*nOutBufferSize*/0,
-                         /*lpBytesReturned*/&dw,
-                         /*lpOverlapped*/nullptr)) {
-      printf("DeviceIoControl failed - %08lx\n", GetLastError());
-    }
-  }
-
-  void SetCT(const char *newTarget) const {
-    GlobalConfig config;
-
-    auto bufferLen = static_cast<uint32_t>(strlen(newTarget) + sizeof(char));
-    if (bufferLen > sizeof(config.targetProcess_))
-      return;
-
-    memcpy(config.targetProcess_, newTarget, bufferLen);
-
-    DWORD dw;
-    if (!DeviceIoControl(device_,
-                         IOCTL_SETCT,
-                         /*lpInBuffer*/config.targetProcess_,
-                         /*nInBufferSize*/bufferLen,
-                         /*lpOutBuffer*/nullptr,
-                         /*nOutBufferSize*/0,
-                         /*lpBytesReturned*/&dw,
-                         /*lpOverlapped*/nullptr)) {
-      printf("DeviceIoControl failed - %08lx\n", GetLastError());
-    }
+    Send(payload);
   }
 
   void SetLI(const char *newTarget) const {
-    SetCP(newTarget);
+    Payload payload = {Payload::Mode | Payload::TargetProcess | Payload::TargetImage};
+    auto &config = payload.config_;
 
-    GlobalConfig config;
+    auto bufferLen = static_cast<uint32_t>(strlen(newTarget) + sizeof(char));
+    if (bufferLen > sizeof(config.targetProcess_))
+      return;
+
+    config.mode_ = GlobalConfig::Mode::LI;
+    memcpy(config.targetProcess_, newTarget, bufferLen);
+
     int convertedChars = MultiByteToWideChar(
       CP_OEMCP,
       MB_ERR_INVALID_CHARS,
@@ -180,17 +154,7 @@ public:
       return;
     }
 
-    DWORD dw;
-    if (!DeviceIoControl(device_,
-                         IOCTL_SETLI,
-                         /*lpInBuffer*/config.targetImage_,
-                         /*nInBufferSize*/convertedChars * sizeof(wchar_t),
-                         /*lpOutBuffer*/nullptr,
-                         /*nOutBufferSize*/0,
-                         /*lpBytesReturned*/&dw,
-                         /*lpOverlapped*/nullptr)) {
-      printf("DeviceIoControl failed - %08lx\n", GetLastError());
-    }
+    Send(payload);
   }
 };
 
@@ -234,10 +198,16 @@ int main(int argc, char *argv[]) {
       switch (command) {
         case info: driver.GetInfo(); break;
         case inject: driver.SetInjectee(target); break;
-        case trace: driver.SetTrace(target); break;
+        case trace:
+          driver.SetHookForProcess(target, GlobalConfig::Mode::Trace);
+          break;
         case li: driver.SetLI(target); break;
-        case cp: driver.SetCP(target); break;
-        case ct: driver.SetCT(target); break;
+        case cp:
+          driver.SetHookForProcess(target, GlobalConfig::Mode::CP);
+          break;
+        case ct:
+          driver.SetHookForProcess(target, GlobalConfig::Mode::CT);
+          break;
       }
     }
   }

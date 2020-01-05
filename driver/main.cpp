@@ -134,57 +134,15 @@ NTSTATUS HkDispatchRoutine(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
     break;
   case IRP_MJ_DEVICE_CONTROL:
     switch (IrpStack->Parameters.DeviceIoControl.IoControlCode) {
-    case IOCTL_GETINFO:
-      if (IrpStack->Parameters.DeviceIoControl.OutputBufferLength >= sizeof(gConfig)) {
-        if (auto p = reinterpret_cast<GlobalConfig*>(Irp->AssociatedIrp.SystemBuffer)) {
-          *p = gConfig;
-          Irp->IoStatus.Information = sizeof(gConfig);
-        }
-      }
+    case IOCTL_RECV:
+      Irp->IoStatus.Information = gConfig.Export(
+        Irp->AssociatedIrp.SystemBuffer,
+        IrpStack->Parameters.DeviceIoControl.OutputBufferLength);
       break;
-    case IOCTL_SETINJECTEE:
-      if (IrpStack->Parameters.DeviceIoControl.InputBufferLength <= sizeof(gConfig.injectee_)
-          && Irp->AssociatedIrp.SystemBuffer) {
-        memcpy(gConfig.injectee_,
-               Irp->AssociatedIrp.SystemBuffer,
-               IrpStack->Parameters.DeviceIoControl.InputBufferLength);
-      }
-      break;
-    case IOCTL_SETTRACE:
-      if (IrpStack->Parameters.DeviceIoControl.InputBufferLength <= sizeof(gConfig.targetProcess_)
-          && Irp->AssociatedIrp.SystemBuffer) {
-        gConfig.mode_ = GlobalConfig::Mode::Trace;
-        memcpy(gConfig.targetProcess_,
-               Irp->AssociatedIrp.SystemBuffer,
-               IrpStack->Parameters.DeviceIoControl.InputBufferLength);
-      }
-      break;
-    case IOCTL_SETLI:
-      if (IrpStack->Parameters.DeviceIoControl.InputBufferLength <= sizeof(gConfig.targetImage_)
-          && Irp->AssociatedIrp.SystemBuffer) {
-        gConfig.mode_ = GlobalConfig::Mode::LI;
-        memcpy(gConfig.targetImage_,
-               Irp->AssociatedIrp.SystemBuffer,
-               IrpStack->Parameters.DeviceIoControl.InputBufferLength);
-      }
-      break;
-    case IOCTL_SETCP:
-      if (IrpStack->Parameters.DeviceIoControl.InputBufferLength <= sizeof(gConfig.targetProcess_)
-          && Irp->AssociatedIrp.SystemBuffer) {
-        gConfig.mode_ = GlobalConfig::Mode::CP;
-        memcpy(gConfig.targetProcess_,
-               Irp->AssociatedIrp.SystemBuffer,
-               IrpStack->Parameters.DeviceIoControl.InputBufferLength);
-      }
-      break;
-    case IOCTL_SETCT:
-      if (IrpStack->Parameters.DeviceIoControl.InputBufferLength <= sizeof(gConfig.targetProcess_)
-          && Irp->AssociatedIrp.SystemBuffer) {
-        gConfig.mode_ = GlobalConfig::Mode::CT;
-        memcpy(gConfig.targetProcess_,
-               Irp->AssociatedIrp.SystemBuffer,
-               IrpStack->Parameters.DeviceIoControl.InputBufferLength);
-      }
+    case IOCTL_SEND:
+      gConfig.Import(
+        Irp->AssociatedIrp.SystemBuffer,
+        IrpStack->Parameters.DeviceIoControl.InputBufferLength);
       break;
     }
     break;
