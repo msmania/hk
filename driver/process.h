@@ -20,6 +20,7 @@ public:
   operator PKPROCESS();
   const char *ProcessName() const;
   void *SectionBase() const;
+  void SearchVad(const wchar_t *filename) const;
 };
 
 class EThread final {

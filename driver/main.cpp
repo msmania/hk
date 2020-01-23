@@ -97,6 +97,21 @@ void Callback_CreateThread(HANDLE ProcessId,
   }
 }
 
+static bool IsProbeDll(const UNICODE_STRING &target) {
+  const UNICODE_STRING probeDll = {18, 20, L"probe.dll"};
+
+  if (target.Length < probeDll.Length) return false;
+
+  const UNICODE_STRING targetUstr = {
+    probeDll.Length,
+    probeDll.MaximumLength,
+    at<wchar_t*>(target.Buffer, target.Length - probeDll.Length)
+    };
+
+  return RtlEqualUnicodeString(&targetUstr, &probeDll,
+                               /*CaseInSensitive*/TRUE);
+}
+
 void Callback_LoadImage(PUNICODE_STRING FullImageName,
                         HANDLE ProcessId,
                         PIMAGE_INFO ImageInfo) {
@@ -105,15 +120,18 @@ void Callback_LoadImage(PUNICODE_STRING FullImageName,
 
   if (!gConfig.IsProcessEnabled(eproc.ProcessName())) return;
 
+  const bool isProbe = IsProbeDll(*FullImageName);
+
   if (gConfig.mode_ != GlobalConfig::Mode::Trace
-      && !gConfig.IsImageEnabled(*FullImageName))
+      && !gConfig.IsImageEnabled(*FullImageName)
+      && !isProbe)
     return;
 
   Log("LI:%5x %ls\n",
       reinterpret_cast<uint32_t>(ProcessId),
       FullImageName->Buffer);
 
-  if (gConfig.mode_ == GlobalConfig::Mode::Trace) return;
+  if (gConfig.mode_ == GlobalConfig::Mode::Trace || isProbe) return;
 
   if (gConfig.mode_ == GlobalConfig::Mode::LI) {
     PopulateProcess(ProcessId);
