@@ -109,8 +109,9 @@ void Callback_LoadImage(PUNICODE_STRING FullImageName,
       && !gConfig.IsImageEnabled(*FullImageName))
     return;
 
-  Log("LI:%5x %ls\n",
+  Log("LI:  %x.%x %ls\n",
       reinterpret_cast<uint32_t>(ProcessId),
+      reinterpret_cast<uint32_t>(PsGetCurrentThreadId()),
       FullImageName->Buffer);
 
   if (gConfig.mode_ == GlobalConfig::Mode::Trace) return;
