@@ -6,7 +6,8 @@
 #include "heap.h"
 #include "peimage.h"
 
-PEImage::PEImage(void* base) : base_{}, directories_{} {
+PEImage::PEImage(void* base)
+    : arch_(CPU::unknown), base_{}, directories_{} {
   constexpr uint16_t MZ = 0x5a4d;
   constexpr uint32_t PE = 0x4550;
   constexpr uint16_t PE32 = 0x10b;
@@ -17,15 +18,26 @@ PEImage::PEImage(void* base) : base_{}, directories_{} {
   if (*at<uint32_t*>(base, dos.e_lfanew) != PE) return;
 
   const auto& fileHeader = *at<PIMAGE_FILE_HEADER>(base, dos.e_lfanew + sizeof(PE));
-  if (fileHeader.Machine != IMAGE_FILE_MACHINE_AMD64) return;
+  if (fileHeader.Machine == IMAGE_FILE_MACHINE_AMD64) {
+    auto& optHeader = *at<PIMAGE_OPTIONAL_HEADER64>(
+      base, dos.e_lfanew + sizeof(PE) + sizeof(IMAGE_FILE_HEADER));
+    if (optHeader.Magic != PE32PLUS) return;
 
-  auto& optHeader = *at<PIMAGE_OPTIONAL_HEADER64>(
-    base, dos.e_lfanew + sizeof(PE) + sizeof(IMAGE_FILE_HEADER));
-  if (optHeader.Magic != PE32PLUS) return;
+    arch_ = CPU::amd64;
+    base_ = at<uint8_t*>(base, 0);
+    directories_ = optHeader.DataDirectory;
+    entrypoint_ = optHeader.AddressOfEntryPoint;
+  }
+  else if (fileHeader.Machine == IMAGE_FILE_MACHINE_I386) {
+    auto& optHeader = *at<PIMAGE_OPTIONAL_HEADER32>(
+      base, dos.e_lfanew + sizeof(PE) + sizeof(IMAGE_FILE_HEADER));
+    if (optHeader.Magic != PE32) return;
 
-  base_ = at<uint8_t*>(base, 0);
-  directories_ = optHeader.DataDirectory;
-  entrypoint_ = optHeader.AddressOfEntryPoint;
+    arch_ = CPU::x86;
+    base_ = at<uint8_t*>(base, 0);
+    directories_ = optHeader.DataDirectory;
+    entrypoint_ = optHeader.AddressOfEntryPoint;
+  }
 }
 
 PEImage::operator bool() const {
@@ -81,17 +93,9 @@ static bool MakeAreaWritable(HANDLE process, void *start, SIZE_T size) {
   return true;
 }
 
-bool PEImage::UpdateImportDirectory(HANDLE process) {
+template<typename NewImportDirectory>
+bool PEImage::UpdateImportDirectoryInternal(HANDLE process) {
   if (!base_) return false;
-
-  struct NewImportDirectory final {
-    char name_[sizeof(GlobalConfig::injectee_)];
-    uint64_t names_[2];
-    uint64_t functions_[2];
-    IMAGE_IMPORT_DESCRIPTOR desc_[1];
-
-    NewImportDirectory() = delete;
-  };
 
   Heap heap(process, base_,
             sizeof(NewImportDirectory)
@@ -100,9 +104,7 @@ bool PEImage::UpdateImportDirectory(HANDLE process) {
 
   auto newDir = at<NewImportDirectory*>(heap, 0);
 
-  uint32_t rvaToDir, rvaToName,
-           rvaToNameArray, rvaToFuncArray,
-           rvaToFunctionName, rvaToFunction;
+  uint32_t rvaToDir, rvaToName, rvaToNameArray, rvaToFuncArray;
   if (!GetRvaSafely(base_, &newDir->desc_, rvaToDir)
       || !GetRvaSafely(base_, newDir->name_, rvaToName)
       || !GetRvaSafely(base_, newDir->names_, rvaToNameArray)
@@ -111,7 +113,8 @@ bool PEImage::UpdateImportDirectory(HANDLE process) {
 
   memset(newDir, 0, sizeof(NewImportDirectory));
   memcpy(newDir->name_, gConfig.injectee_, sizeof(newDir->name_));
-  newDir->names_[0] = newDir->functions_[0] = 0x8000000000000064;
+  newDir->names_[0] = newDir->functions_[0] =
+      NewImportDirectory::OrdinalFlag | 100;
   newDir->desc_[0].Name = rvaToName;
   //newDir->desc_[0].ForwarderChain = -1;
   newDir->desc_[0].OriginalFirstThunk = rvaToNameArray;
@@ -135,6 +138,18 @@ bool PEImage::UpdateImportDirectory(HANDLE process) {
 
   heap.Detach(); // Just let it leak.
   return true;
+}
+
+bool PEImage::UpdateImportDirectory(HANDLE process) {
+  switch (arch_) {
+  case CPU::amd64:
+    return UpdateImportDirectoryInternal<NewImportDirectory64>(process);
+  case CPU::x86:
+    return UpdateImportDirectoryInternal<NewImportDirectory32>(process);
+  case CPU::unknown:
+  default:
+    return false;
+  }
 }
 
 void PEImage::DumpImportTable() const {

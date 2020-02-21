@@ -56,6 +56,40 @@ typedef struct _IMAGE_DATA_DIRECTORY {
 
 #define IMAGE_NUMBEROF_DIRECTORY_ENTRIES 16
 
+typedef struct _IMAGE_OPTIONAL_HEADER {
+    uint16_t Magic;
+    uint8_t  MajorLinkerVersion;
+    uint8_t  MinorLinkerVersion;
+    uint32_t SizeOfCode;
+    uint32_t SizeOfInitializedData;
+    uint32_t SizeOfUninitializedData;
+    uint32_t AddressOfEntryPoint;
+    uint32_t BaseOfCode;
+    uint32_t BaseOfData;
+    uint32_t ImageBase;
+    uint32_t SectionAlignment;
+    uint32_t FileAlignment;
+    uint16_t MajorOperatingSystemVersion;
+    uint16_t MinorOperatingSystemVersion;
+    uint16_t MajorImageVersion;
+    uint16_t MinorImageVersion;
+    uint16_t MajorSubsystemVersion;
+    uint16_t MinorSubsystemVersion;
+    uint32_t Win32VersionValue;
+    uint32_t SizeOfImage;
+    uint32_t SizeOfHeaders;
+    uint32_t CheckSum;
+    uint16_t Subsystem;
+    uint16_t DllCharacteristics;
+    uint32_t SizeOfStackReserve;
+    uint32_t SizeOfStackCommit;
+    uint32_t SizeOfHeapReserve;
+    uint32_t SizeOfHeapCommit;
+    uint32_t LoaderFlags;
+    uint32_t NumberOfRvaAndSizes;
+    IMAGE_DATA_DIRECTORY DataDirectory[IMAGE_NUMBEROF_DIRECTORY_ENTRIES];
+} IMAGE_OPTIONAL_HEADER32, *PIMAGE_OPTIONAL_HEADER32;
+
 typedef struct _IMAGE_OPTIONAL_HEADER64 {
   uint16_t Magic;
   uint8_t  MajorLinkerVersion;
@@ -91,6 +125,8 @@ typedef struct _IMAGE_OPTIONAL_HEADER64 {
 
 #define IMAGE_FILE_MACHINE_I386  0x014c  // Intel 386.
 #define IMAGE_FILE_MACHINE_AMD64 0x8664  // AMD64 (K8)
+#define IMAGE_ORDINAL_FLAG64 0x8000000000000000
+#define IMAGE_ORDINAL_FLAG32 0x80000000
 
 typedef struct _IMAGE_IMPORT_DESCRIPTOR {
   union {
@@ -109,9 +145,33 @@ typedef struct _IMAGE_IMPORT_DESCRIPTOR {
 typedef IMAGE_IMPORT_DESCRIPTOR UNALIGNED *PIMAGE_IMPORT_DESCRIPTOR;
 
 class PEImage {
+  enum class CPU {unknown, amd64, x86} arch_;
   uint8_t* base_;
   PIMAGE_DATA_DIRECTORY directories_;
   uint32_t entrypoint_;
+
+  struct NewImportDirectory64 final {
+    constexpr static uint64_t OrdinalFlag = IMAGE_ORDINAL_FLAG64;
+    char name_[sizeof(GlobalConfig::injectee_)];
+    uint64_t names_[2];
+    uint64_t functions_[2];
+    IMAGE_IMPORT_DESCRIPTOR desc_[1];
+
+    NewImportDirectory64() = delete;
+  };
+
+  struct NewImportDirectory32 final {
+    constexpr static uint32_t OrdinalFlag = IMAGE_ORDINAL_FLAG32;
+    char name_[sizeof(GlobalConfig::injectee_)];
+    uint32_t names_[2];
+    uint32_t functions_[2];
+    IMAGE_IMPORT_DESCRIPTOR desc_[1];
+
+    NewImportDirectory32() = delete;
+  };
+
+  template<typename NewImportDirectory>
+  bool UpdateImportDirectoryInternal(HANDLE process);
 
 public:
   PEImage(void* base);

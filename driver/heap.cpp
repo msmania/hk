@@ -4,9 +4,16 @@
 #include "common.h"
 #include "heap.h"
 
+constexpr int kRegionAllocationTryLimit = 100;
+constexpr uintptr_t kMinimumAllocationPoint = 0x8000000;
+
 Heap::Heap(HANDLE process, PVOID desiredBase, SIZE_T size) : process_(process), base_{} {
+  if (reinterpret_cast<uintptr_t>(desiredBase) < kMinimumAllocationPoint)
+    desiredBase = reinterpret_cast<PVOID>(kMinimumAllocationPoint);
+
   desiredBase = reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(desiredBase) & ~0xffff);
-  for (int i = 0; i < 100; ++i) {
+
+  for (int i = 0; i < kRegionAllocationTryLimit; ++i) {
     desiredBase = at<void*>(desiredBase, 0x10000);
     NTSTATUS status = ZwAllocateVirtualMemory(
       process,
