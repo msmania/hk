@@ -45,7 +45,7 @@ static bool GetRvaSafely(const void *base, const void *target, uint32_t &rva) {
 
 static bool IsMemoryPageWritable(HANDLE process, void *page) {
   MEMORY_BASIC_INFORMATION info{};
-  size_t len;
+  SIZE_T len;
   NTSTATUS status = ZwQueryVirtualMemory(
       process, page, MemoryBasicInformation, &info, sizeof(info), &len);
   if (!NT_SUCCESS(status)) {
@@ -57,7 +57,7 @@ static bool IsMemoryPageWritable(HANDLE process, void *page) {
   return info.Protect == PAGE_READWRITE || info.Protect == PAGE_WRITECOPY;
 }
 
-static bool MakeAreaWritable(HANDLE process, void *start, size_t size) {
+static bool MakeAreaWritable(HANDLE process, void *start, SIZE_T size) {
   if (IsMemoryPageWritable(process, start)) return true;
 
   UNICODE_STRING name;

@@ -5,7 +5,7 @@ ARCH=x86
 !ENDIF
 
 WDKINCPATH=C:\Program Files (x86)\Windows Kits\10\Include\10.0.18362.0\km
-WDKLIBPATH=C:\Program Files (x86)\Windows Kits\10\Lib\10.0.18362.0\km\x64
+WDKLIBPATH=C:\Program Files (x86)\Windows Kits\10\Lib\10.0.18362.0\km\$(PLATFORM)
 CODESIGN_SHA1=19fe76577ba49493677e0a39b0b11c2abab56b2e
 
 OUTDIR=bin\$(ARCH)
@@ -55,13 +55,20 @@ CFLAGS_DRIVER=\
 	/GF\
 	/Gy\
 	/GR-\
-	/kernel -cbstring -d2epilogunwind\
+	/Gz\
+	/kernel\
+	/cbstring\
 	/fp:precise\
 	/Zp8\
 	/Zc:wchar_t-\
 	/Zc:forScope\
 	/Zc:inline\
+!IF "$(ARCH)"=="amd64"
+	/d2epilogunwind\
 	/D_AMD64_\
+!ELSE
+	/D_X86_\
+!ENDIF
 	/I"$(WDKINCPATH)"\
 	/I"$(WDKINCPATH)\crt"\
 

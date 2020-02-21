@@ -4,7 +4,7 @@
 #include "common.h"
 #include "heap.h"
 
-Heap::Heap(HANDLE process, PVOID desiredBase, size_t size) : process_(process), base_{} {
+Heap::Heap(HANDLE process, PVOID desiredBase, SIZE_T size) : process_(process), base_{} {
   desiredBase = reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(desiredBase) & ~0xffff);
   for (int i = 0; i < 100; ++i) {
     desiredBase = at<void*>(desiredBase, 0x10000);
@@ -32,7 +32,7 @@ Heap::Heap(HANDLE process, PVOID desiredBase, size_t size) : process_(process), 
 
 Heap::~Heap() {
   if (base_) {
-    size_t size = 0;
+    SIZE_T size = 0;
     ZwFreeVirtualMemory(process_, &base_, &size, MEM_RELEASE);
   }
 }
