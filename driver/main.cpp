@@ -20,6 +20,9 @@ extern "C" {
 #pragma alloc_text(PAGE, HkDispatchRoutine)
 #endif
 
+#define HandleToULong(h) \
+  static_cast<uint32_t>(reinterpret_cast<uintptr_t>(h) & 0xffffffff)
+
 void Log(const char* format, ...) {
   char message[1024];
   va_list va;
@@ -55,8 +58,8 @@ void Callback_CreateProcess(HANDLE ParentId,
   if (!gConfig.IsProcessEnabled(eproc.ProcessName())) return;
 
   Log("CP: %x --> %x %p\n",
-      reinterpret_cast<uint32_t>(ParentId),
-      reinterpret_cast<uint32_t>(ProcessId),
+      HandleToULong(ParentId),
+      HandleToULong(ProcessId),
       eproc);
 
   if (gConfig.mode_ == GlobalConfig::Mode::Trace) return;
@@ -86,8 +89,8 @@ void Callback_CreateThread(HANDLE ProcessId,
   }
 
   Log("CT: %x.%x %p\n",
-      reinterpret_cast<uint32_t>(ProcessId),
-      reinterpret_cast<uint32_t>(ThreadId),
+      HandleToULong(ProcessId),
+      HandleToULong(ThreadId),
       ethread);
 
   if (gConfig.mode_ == GlobalConfig::Mode::Trace) return;
@@ -110,8 +113,8 @@ void Callback_LoadImage(PUNICODE_STRING FullImageName,
     return;
 
   Log("LI:  %x.%x %ls\n",
-      reinterpret_cast<uint32_t>(ProcessId),
-      reinterpret_cast<uint32_t>(PsGetCurrentThreadId()),
+      HandleToULong(ProcessId),
+      HandleToULong(PsGetCurrentThreadId()),
       FullImageName->Buffer);
 
   if (gConfig.mode_ == GlobalConfig::Mode::Trace) return;

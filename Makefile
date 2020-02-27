@@ -50,6 +50,8 @@ CFLAGS=\
 	/wd4710\
 	/wd5045\
 
+# warning C4201: nonstandard extension used: nameless struct/union
+# warning C4820: X bytes padding added after data member
 CFLAGS_DRIVER=\
 	$(CFLAGS)\
 	/GF\
@@ -71,6 +73,8 @@ CFLAGS_DRIVER=\
 !ENDIF
 	/I"$(WDKINCPATH)"\
 	/I"$(WDKINCPATH)\crt"\
+	/wd4201\
+	/wd4820\
 
 CFLAGS_PROBE=\
 	$(CFLAGS)\
