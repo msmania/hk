@@ -20,6 +20,7 @@ OBJS_PROBE=\
 OBJS_DRIVER=\
 	driver\$(OBJDIR)\config.obj\
 	driver\$(OBJDIR)\heap.obj\
+	driver\$(OBJDIR)\magic.obj\
 	driver\$(OBJDIR)\main.obj\
 	driver\$(OBJDIR)\peimage.obj\
 	driver\$(OBJDIR)\process.obj\

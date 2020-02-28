@@ -57,3 +57,26 @@ void* Heap::Detach() {
   base_ = nullptr;
   return base;
 }
+
+Pool::Pool(POOL_TYPE type, SIZE_T size)
+  : base_(nullptr) {
+  base_ = ExAllocatePoolWithTag(type, size, TAG);
+  if (!base_)  {
+    Log("ExAllocatePoolWithTag failed\n");
+    base_ = nullptr;
+  }
+}
+
+Pool::~Pool() {
+  if (base_) {
+    ExFreePool(base_);
+  }
+}
+
+Pool::operator bool() const {
+  return !!base_;
+}
+
+Pool::operator void*() {
+  return base_;
+}

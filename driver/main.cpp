@@ -5,7 +5,9 @@
 
 #include "common.h"
 #include "config.h"
+#include "heap.h"
 #include "peimage.h"
+#include "magic.h"
 #include "process.h"
 
 extern "C" {
@@ -209,6 +211,7 @@ NTSTATUS DriverEntry(_In_ PDRIVER_OBJECT DriverObject,
   }
 
   gConfig.Init();
+  gMagic.Init();
 
 cleanup:
   if (!NT_SUCCESS(status) && deviceObject) {

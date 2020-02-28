@@ -7,6 +7,12 @@ T at(void *base,  U offset) {
   return reinterpret_cast<T>(reinterpret_cast<uint8_t*>(base) + offset);
 }
 
+template<typename T, typename U>
+T at(const void *base,  U offset) {
+  return reinterpret_cast<T>(
+      reinterpret_cast<const uint8_t*>(base) + offset);
+}
+
 #define NEW_IOCTL(ID)\
   CTL_CODE(FILE_DEVICE_UNKNOWN,\
            ID,\

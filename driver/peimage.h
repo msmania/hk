@@ -144,6 +144,60 @@ typedef struct _IMAGE_IMPORT_DESCRIPTOR {
 } IMAGE_IMPORT_DESCRIPTOR;
 typedef IMAGE_IMPORT_DESCRIPTOR UNALIGNED *PIMAGE_IMPORT_DESCRIPTOR;
 
+struct IMAGE_RESOURCE_DIRECTORY {
+  uint32_t Characteristics;
+  uint32_t TimeDateStamp;
+  uint16_t MajorVersion;
+  uint16_t MinorVersion;
+  uint16_t NumberOfNamedEntries;
+  uint16_t NumberOfIdEntries;
+};
+
+struct IMAGE_RESOURCE_DIRECTORY_ENTRY {
+  union {
+    struct {
+      uint32_t NameOffset:31;
+      uint32_t NameIsString:1;
+    } DUMMYSTRUCTNAME;
+    uint32_t Name;
+    uint16_t Id;
+  } DUMMYUNIONNAME;
+  union {
+    uint32_t OffsetToData;
+    struct {
+      uint32_t OffsetToDirectory:31;
+      uint32_t DataIsDirectory:1;
+    } DUMMYSTRUCTNAME2;
+  } DUMMYUNIONNAME2;
+};
+
+struct IMAGE_RESOURCE_DATA_ENTRY {
+  uint32_t OffsetToData;
+  uint32_t Size;
+  uint32_t CodePage;
+  uint32_t Reserved;
+};
+
+#define IS_INTRESOURCE(_r) ((((uintptr_t)(_r)) >> 16) == 0)
+#define MAKEINTRESOURCEW(i) ((wchar_t*)((uintptr_t)((uint16_t)(i))))
+#define RT_VERSION MAKEINTRESOURCEW(16)
+
+struct VS_FIXEDFILEINFO {
+  uint32_t dwSignature;
+  uint32_t dwStrucVersion;
+  uint32_t dwFileVersionMS;
+  uint32_t dwFileVersionLS;
+  uint32_t dwProductVersionMS;
+  uint32_t dwProductVersionLS;
+  uint32_t dwFileFlagsMask;
+  uint32_t dwFileFlags;
+  uint32_t dwFileOS;
+  uint32_t dwFileType;
+  uint32_t dwFileSubtype;
+  uint32_t dwFileDateMS;
+  uint32_t dwFileDateLS;
+};
+
 class PEImage {
   enum class CPU {unknown, amd64, x86} arch_;
   uint8_t* base_;
@@ -179,4 +233,5 @@ public:
 
   bool UpdateImportDirectory(HANDLE process);
   void DumpImportTable() const;
+  VS_FIXEDFILEINFO GetVersion() const;
 };
