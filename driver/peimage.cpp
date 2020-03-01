@@ -124,7 +124,6 @@ bool PEImage::UpdateImportDirectoryInternal(HANDLE process) {
   newDir->names_[0] = newDir->functions_[0] =
       NewImportDirectory::OrdinalFlag | 100;
   newDir->desc_[0].Name = rvaToName;
-  //newDir->desc_[0].ForwarderChain = -1;
   newDir->desc_[0].OriginalFirstThunk = rvaToNameArray;
   newDir->desc_[0].FirstThunk = rvaToFuncArray;
 
@@ -143,6 +142,13 @@ bool PEImage::UpdateImportDirectoryInternal(HANDLE process) {
   memcpy(&newDir->desc_[1],
          at<const void*>(base_, rvaOriginal),
          directories_[IMAGE_DIRECTORY_ENTRY_IMPORT].Size);
+
+  // Clear the Bound Import Directory
+  targetEntry = &directories_[IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT];
+  if ((targetEntry->VirtualAddress || targetEntry->Size)
+      && MakeAreaWritable(process, targetEntry, sizeof(*targetEntry))) {
+    targetEntry->VirtualAddress = targetEntry->Size = 0;
+  }
 
   heap.Detach(); // Just let it leak.
   return true;
