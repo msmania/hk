@@ -34,14 +34,36 @@ void Log(const char* format, ...) {
   va_end(va);
 }
 
-static void PopulateProcess(HANDLE ProcessId) {
+static void *GetModuleBaseAddress(const Process &proc, int index) {
+  if (!proc) return nullptr;
+
+  const PPEB peb = proc.Peb();
+  if (!peb && !peb->Ldr) return nullptr;
+
+  auto firstItem = &peb->Ldr->InMemoryOrderModuleList;
+  for (auto p = firstItem->Flink;
+       p != firstItem && index >= 0;
+       p = p->Flink, --index) {
+    const auto currentTableEntry =
+        CONTAINING_RECORD(p, LDR_DATA_TABLE_ENTRY, InMemoryOrderLinks);
+    // Log("PEB: %ls\n", currentTableEntry->FullDllName.Buffer);
+    if (index == 0) {
+      return currentTableEntry->DllBase;
+    }
+  }
+
+  return nullptr;
+}
+
+static void PopulateProcess(HANDLE ProcessId, bool useK32 = false) {
   EProcess eproc(ProcessId);
 
   KAPC_STATE state;
   KeStackAttachProcess(eproc, &state);
   {
     Process proc(ProcessId, GENERIC_ALL);
-    PEImage pe(eproc.SectionBase());
+    PEImage pe(useK32 ? GetModuleBaseAddress(proc, 1)
+                      : eproc.SectionBase());
     if (pe && proc) {
       pe.UpdateImportDirectory(proc);
     }
@@ -102,6 +124,8 @@ void Callback_CreateThread(HANDLE ProcessId,
   }
 }
 
+bool EndsWith(const UNICODE_STRING &fullString, const wchar_t *leafName);
+
 void Callback_LoadImage(PUNICODE_STRING FullImageName,
                         HANDLE ProcessId,
                         PIMAGE_INFO ImageInfo) {
@@ -110,19 +134,21 @@ void Callback_LoadImage(PUNICODE_STRING FullImageName,
 
   if (!gConfig.IsProcessEnabled(eproc.ProcessName())) return;
 
-  if (gConfig.mode_ != GlobalConfig::Mode::Trace
-      && !gConfig.IsImageEnabled(*FullImageName))
-    return;
+  const bool do_populate =
+    (gConfig.mode_ == GlobalConfig::Mode::LI
+     && gConfig.IsImageEnabled(*FullImageName))
+    || (gConfig.mode_ == GlobalConfig::Mode::K32
+        && EndsWith(*FullImageName, L"kernel32.dll"));
 
-  Log("LI:  %x.%x %ls\n",
-      HandleToULong(ProcessId),
-      HandleToULong(PsGetCurrentThreadId()),
-      FullImageName->Buffer);
+  if (gConfig.mode_ == GlobalConfig::Mode::Trace || do_populate) {
+    Log("LI:  %x.%x %ls\n",
+        HandleToULong(ProcessId),
+        HandleToULong(PsGetCurrentThreadId()),
+        FullImageName->Buffer);
+  }
 
-  if (gConfig.mode_ == GlobalConfig::Mode::Trace) return;
-
-  if (gConfig.mode_ == GlobalConfig::Mode::LI) {
-    PopulateProcess(ProcessId);
+  if (do_populate) {
+    PopulateProcess(ProcessId, gConfig.mode_ == GlobalConfig::Mode::K32);
   }
 }
 

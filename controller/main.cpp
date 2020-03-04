@@ -100,6 +100,13 @@ public:
                config.targetProcess_,
                config.injectee_);
         break;
+      case GlobalConfig::Mode::K32:
+        printf("Mode:     Kernel32\n"
+               "Target:   %hs\n"
+               "Injectee: %hs\n",
+               config.targetProcess_,
+               config.injectee_);
+        break;
       }
     }
   }
@@ -162,7 +169,7 @@ void ShowUsage() {
   printf("USAGE: hkc [COMMAND]\n\n"
          "  --info\n"
          "  --inject <injectee>\n"
-         "  --[trace|li|cp|ct] <target>\n"
+         "  --[trace|li|cp|ct|k32] <target>\n"
          );
 }
 
@@ -172,7 +179,7 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  enum {uninitialized, info, inject, trace, li, cp, ct}
+  enum {uninitialized, info, inject, trace, li, cp, ct, k32}
     command = uninitialized;
   const char *target = nullptr;
 
@@ -190,6 +197,8 @@ int main(int argc, char *argv[]) {
       command = cp;
     else if (strcmp(argv[1], "--ct") == 0)
       command = ct;
+    else if (strcmp(argv[1], "--k32") == 0)
+      command = k32;
   }
 
   if (command != uninitialized) {
@@ -207,6 +216,9 @@ int main(int argc, char *argv[]) {
           break;
         case ct:
           driver.SetHookForProcess(target, GlobalConfig::Mode::CT);
+          break;
+        case k32:
+          driver.SetHookForProcess(target, GlobalConfig::Mode::K32);
           break;
       }
     }

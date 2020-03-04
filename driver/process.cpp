@@ -28,6 +28,21 @@ Process::operator HANDLE() const {
   return process_;
 }
 
+PEB *Process::Peb() const {
+  uint32_t bytesReturned;
+  PROCESS_BASIC_INFORMATION info;
+  NTSTATUS status = ZwQueryInformationProcess(process_,
+                                              ProcessBasicInformation,
+                                              &info,
+                                              sizeof(info),
+                                              &bytesReturned);
+  if (!NT_SUCCESS(status))  {
+    Log("ZwQueryInformationProcess failed - %08x\n", status);
+    return nullptr;
+  }
+  return info.PebBaseAddress;
+}
+
 EProcess::EProcess(HANDLE pid) : obj_{} {
   NTSTATUS status = PsLookupProcessByProcessId(pid, &obj_);
   if (!NT_SUCCESS(status))  {

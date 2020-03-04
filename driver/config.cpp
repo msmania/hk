@@ -15,23 +15,29 @@ bool ConfigInternal::IsProcessEnabled(const char *target) const {
          && _stricmp(targetProcess_, target) == 0;
 }
 
+bool EndsWith(const UNICODE_STRING &fullString, const wchar_t *leafName) {
+  uint16_t stringLen = static_cast<uint16_t>(wcslen(leafName) * sizeof(wchar_t));
+  uint16_t bufferLen = stringLen + sizeof(wchar_t);
+
+  if (fullString.Length < stringLen) return false;
+
+  const UNICODE_STRING
+    leaf = {
+      stringLen, bufferLen,
+      const_cast<wchar_t*>(leafName)
+    },
+    partial = {
+      stringLen, bufferLen,
+      at<wchar_t*>(fullString.Buffer, fullString.Length - stringLen)
+    };
+  return RtlEqualUnicodeString(&leaf, &partial, /*CaseInSensitive*/TRUE);
+}
+
 bool ConfigInternal::IsImageEnabled(const UNICODE_STRING &target) {
   if (mode_ == Mode::Uninitialized
       || !targetImage_[0]) return false;
 
-  uint16_t stringLen = static_cast<uint16_t>(wcslen(targetImage_) * sizeof(wchar_t));
-  uint16_t bufferLen = stringLen + sizeof(wchar_t);
-
-  if (target.Length < stringLen) return false;
-
-  const UNICODE_STRING current = {stringLen, bufferLen, targetImage_};
-  const UNICODE_STRING targetUstr = {
-    stringLen, bufferLen,
-    at<wchar_t*>(target.Buffer, target.Length - stringLen)
-    };
-
-  return RtlEqualUnicodeString(&current, &targetUstr,
-                               /*CaseInSensitive*/TRUE);
+  return EndsWith(target, targetImage_);
 }
 
 bool ConfigInternal::Import(const void *buffer, uint32_t bufferSize) {

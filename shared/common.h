@@ -27,7 +27,7 @@ T at(const void *base,  U offset) {
 #define SYMLINK_NAME_K L"\\DosDevices\\hk"
 
 struct GlobalConfig {
-  enum class Mode {Uninitialized, Trace, LI, CP, CT};
+  enum class Mode {Uninitialized, Trace, LI, CP, CT, K32};
   Mode mode_;
   char injectee_[128];
   char targetProcess_[256];
