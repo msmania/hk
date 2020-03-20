@@ -18,6 +18,7 @@ OBJS_PROBE=\
 	probe\$(OBJDIR)\dllmain.obj\
 
 OBJS_DRIVER=\
+	shared\$(OBJDIR)\utils.obj\
 	driver\$(OBJDIR)\config.obj\
 	driver\$(OBJDIR)\heap.obj\
 	driver\$(OBJDIR)\magic.obj\
@@ -130,6 +131,10 @@ $(OUTDIR)\$(PROBE): $(OBJS_PROBE)
 {controller}.cpp{controller\$(OBJDIR)}.obj:
 	@if not exist controller\$(OBJDIR) mkdir controller\$(OBJDIR)
 	$(CC) $(CFLAGS) /DUNICODE /Fo"controller\$(OBJDIR)\\" /Fd"controller\$(OBJDIR)\\" $<
+
+{shared}.cpp{shared\$(OBJDIR)}.obj:
+	@if not exist shared\$(OBJDIR) mkdir shared\$(OBJDIR)
+	$(CC) $(CFLAGS) /Fo"shared\$(OBJDIR)\\" /Fd"shared\$(OBJDIR)\\" $<
 
 {driver}.cpp{driver\$(OBJDIR)}.obj:
 	@if not exist driver\$(OBJDIR) mkdir driver\$(OBJDIR)

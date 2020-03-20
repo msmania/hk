@@ -134,11 +134,13 @@ namespace {
     }
   };
 
+  constexpr int NUM_CHUNKS = 3;
+
   struct NewImportDirectory64 final {
     constexpr static uint64_t OrdinalFlag = IMAGE_ORDINAL_FLAG64;
     char name_[sizeof(GlobalConfig::injectee_)];
-    Thunk<uint64_t> thunks_[1];
-    ImportDescriptor desc_[1];
+    Thunk<uint64_t> thunks_[NUM_CHUNKS];
+    ImportDescriptor desc_[NUM_CHUNKS];
 
     NewImportDirectory64() = delete;
   };
@@ -146,12 +148,18 @@ namespace {
   struct NewImportDirectory32 final {
     constexpr static uint32_t OrdinalFlag = IMAGE_ORDINAL_FLAG32;
     char name_[sizeof(GlobalConfig::injectee_)];
-    Thunk<uint32_t> thunks_[1];
-    ImportDescriptor desc_[1];
+    Thunk<uint32_t> thunks_[NUM_CHUNKS];
+    ImportDescriptor desc_[NUM_CHUNKS];
 
     NewImportDirectory32() = delete;
   };
 }
+
+int CopyAndSplit(const char *src,
+                 char *dst,
+                 const char *chunks[],
+                 int lenChunks,
+                 char delim = '|');
 
 template<typename NewImportDirectory>
 bool PEImage::UpdateImportDirectoryInternal(HANDLE process) {
@@ -168,10 +176,19 @@ bool PEImage::UpdateImportDirectoryInternal(HANDLE process) {
   if (!GetRvaSafely(base_, &newDir->desc_, rvaToDir))
     return false;
 
-  memcpy(newDir->name_, gConfig.injectee_, sizeof(newDir->name_));
-  newDir->thunks_[0].Populate(NewImportDirectory::OrdinalFlag | 100);
-  if (!newDir->desc_[0].Populate(base_, newDir->name_, newDir->thunks_[0]))
+  const char *names[NUM_CHUNKS];
+  int actualChunks = CopyAndSplit(gConfig.injectee_,
+                                  newDir->name_,
+                                  names,
+                                  NUM_CHUNKS,
+                                  '*');
+  if (actualChunks < 1)
     return false;
+  for (int i = 0; i < actualChunks; ++i) {
+    newDir->thunks_[i].Populate(NewImportDirectory::OrdinalFlag | 100);
+    if (!newDir->desc_[i].Populate(base_, names[i], newDir->thunks_[i]))
+      return false;
+  }
 
   uint32_t rvaOriginal =
     directories_[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress;
@@ -185,7 +202,7 @@ bool PEImage::UpdateImportDirectoryInternal(HANDLE process) {
   targetEntry->Size += sizeof(IMAGE_IMPORT_DESCRIPTOR);
   Log("*(%p) = %08x -> %08x\n", targetEntry, rvaOriginal, rvaToDir);
 
-  memcpy(&newDir->desc_[1],
+  memcpy(&newDir->desc_[actualChunks],
          at<const void*>(base_, rvaOriginal),
          directories_[IMAGE_DIRECTORY_ENTRY_IMPORT].Size);
 
