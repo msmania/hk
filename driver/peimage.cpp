@@ -102,12 +102,43 @@ static bool MakeAreaWritable(HANDLE process, void *start, SIZE_T size) {
 }
 
 namespace {
+  template <typename T>
+  struct Thunk {
+    T names_[2];
+    T functions_[2];
+
+    Thunk() = delete;
+
+    void Populate(T value) {
+      names_[0] = functions_[0] = value;
+      names_[1] = functions_[1] = 0;
+    }
+  };
+
+  struct ImportDescriptor : IMAGE_IMPORT_DESCRIPTOR {
+    ImportDescriptor() = delete;
+
+    template <typename ThunkT>
+    bool Populate(uint8_t *base, const char *name, const ThunkT &thunk) {
+      uint32_t rvaToName, rvaToNameArray, rvaToFuncArray;
+      if (!GetRvaSafely(base, name, rvaToName)
+          || !GetRvaSafely(base, thunk.names_, rvaToNameArray)
+          || !GetRvaSafely(base, thunk.functions_, rvaToFuncArray))
+        return false;
+
+      OriginalFirstThunk = rvaToNameArray;
+      TimeDateStamp = ForwarderChain = 0;
+      Name = rvaToName;
+      FirstThunk = rvaToFuncArray;
+      return true;
+    }
+  };
+
   struct NewImportDirectory64 final {
     constexpr static uint64_t OrdinalFlag = IMAGE_ORDINAL_FLAG64;
     char name_[sizeof(GlobalConfig::injectee_)];
-    uint64_t names_[2];
-    uint64_t functions_[2];
-    IMAGE_IMPORT_DESCRIPTOR desc_[1];
+    Thunk<uint64_t> thunks_[1];
+    ImportDescriptor desc_[1];
 
     NewImportDirectory64() = delete;
   };
@@ -115,9 +146,8 @@ namespace {
   struct NewImportDirectory32 final {
     constexpr static uint32_t OrdinalFlag = IMAGE_ORDINAL_FLAG32;
     char name_[sizeof(GlobalConfig::injectee_)];
-    uint32_t names_[2];
-    uint32_t functions_[2];
-    IMAGE_IMPORT_DESCRIPTOR desc_[1];
+    Thunk<uint32_t> thunks_[1];
+    ImportDescriptor desc_[1];
 
     NewImportDirectory32() = delete;
   };
@@ -134,20 +164,14 @@ bool PEImage::UpdateImportDirectoryInternal(HANDLE process) {
 
   auto newDir = at<NewImportDirectory*>(heap, 0);
 
-  uint32_t rvaToDir, rvaToName, rvaToNameArray, rvaToFuncArray;
-  if (!GetRvaSafely(base_, &newDir->desc_, rvaToDir)
-      || !GetRvaSafely(base_, newDir->name_, rvaToName)
-      || !GetRvaSafely(base_, newDir->names_, rvaToNameArray)
-      || !GetRvaSafely(base_, newDir->functions_, rvaToFuncArray))
+  uint32_t rvaToDir;
+  if (!GetRvaSafely(base_, &newDir->desc_, rvaToDir))
     return false;
 
-  memset(newDir, 0, sizeof(NewImportDirectory));
   memcpy(newDir->name_, gConfig.injectee_, sizeof(newDir->name_));
-  newDir->names_[0] = newDir->functions_[0] =
-      NewImportDirectory::OrdinalFlag | 100;
-  newDir->desc_[0].Name = rvaToName;
-  newDir->desc_[0].OriginalFirstThunk = rvaToNameArray;
-  newDir->desc_[0].FirstThunk = rvaToFuncArray;
+  newDir->thunks_[0].Populate(NewImportDirectory::OrdinalFlag | 100);
+  if (!newDir->desc_[0].Populate(base_, newDir->name_, newDir->thunks_[0]))
+    return false;
 
   uint32_t rvaOriginal =
     directories_[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress;
