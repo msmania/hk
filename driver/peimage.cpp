@@ -324,6 +324,11 @@ VS_FIXEDFILEINFO PEImage::GetVersion() const {
         VS_FIXEDFILEINFO Value;
       };
 
+      // |data| may be paged out.
+      if (!MmIsAddressValid(const_cast<IMAGE_RESOURCE_DATA_ENTRY*>(data))) {
+        return;
+      }
+
       if (data->Size < sizeof(VS_VERSIONINFO)) return;
 
       auto context = reinterpret_cast<ResourceIteratorContext*>(param);
