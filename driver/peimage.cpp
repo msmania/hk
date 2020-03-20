@@ -101,6 +101,28 @@ static bool MakeAreaWritable(HANDLE process, void *start, SIZE_T size) {
   return true;
 }
 
+namespace {
+  struct NewImportDirectory64 final {
+    constexpr static uint64_t OrdinalFlag = IMAGE_ORDINAL_FLAG64;
+    char name_[sizeof(GlobalConfig::injectee_)];
+    uint64_t names_[2];
+    uint64_t functions_[2];
+    IMAGE_IMPORT_DESCRIPTOR desc_[1];
+
+    NewImportDirectory64() = delete;
+  };
+
+  struct NewImportDirectory32 final {
+    constexpr static uint32_t OrdinalFlag = IMAGE_ORDINAL_FLAG32;
+    char name_[sizeof(GlobalConfig::injectee_)];
+    uint32_t names_[2];
+    uint32_t functions_[2];
+    IMAGE_IMPORT_DESCRIPTOR desc_[1];
+
+    NewImportDirectory32() = delete;
+  };
+}
+
 template<typename NewImportDirectory>
 bool PEImage::UpdateImportDirectoryInternal(HANDLE process) {
   if (!base_) return false;

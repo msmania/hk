@@ -204,26 +204,6 @@ class PEImage {
   PIMAGE_DATA_DIRECTORY directories_;
   uint32_t entrypoint_;
 
-  struct NewImportDirectory64 final {
-    constexpr static uint64_t OrdinalFlag = IMAGE_ORDINAL_FLAG64;
-    char name_[sizeof(GlobalConfig::injectee_)];
-    uint64_t names_[2];
-    uint64_t functions_[2];
-    IMAGE_IMPORT_DESCRIPTOR desc_[1];
-
-    NewImportDirectory64() = delete;
-  };
-
-  struct NewImportDirectory32 final {
-    constexpr static uint32_t OrdinalFlag = IMAGE_ORDINAL_FLAG32;
-    char name_[sizeof(GlobalConfig::injectee_)];
-    uint32_t names_[2];
-    uint32_t functions_[2];
-    IMAGE_IMPORT_DESCRIPTOR desc_[1];
-
-    NewImportDirectory32() = delete;
-  };
-
   template<typename NewImportDirectory>
   bool UpdateImportDirectoryInternal(HANDLE process);
 
