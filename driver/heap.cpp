@@ -4,7 +4,7 @@
 #include "common.h"
 #include "heap.h"
 
-constexpr int kRegionAllocationTryLimit = 100;
+constexpr int kRegionAllocationTryLimit = 4000;
 constexpr uintptr_t kMinimumAllocationPoint = 0x8000000;
 
 Heap::Heap(HANDLE process, PVOID desiredBase, SIZE_T size) : process_(process), base_{} {

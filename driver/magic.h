@@ -1,7 +1,9 @@
 #pragma once
 
 class Magic {
-  void InitInternal(uint32_t major, uint32_t minor);
+  void InitInternal(uint32_t major,
+                    uint32_t minor,
+                    uint32_t buildnum);
   void InitInternal(uint32_t major,
                     uint32_t minor,
                     uint32_t buildnum,

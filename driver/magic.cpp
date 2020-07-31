@@ -71,12 +71,20 @@ PVOID GetKernelBaseAddress() {
   return nullptr;
 }
 
-void Magic::InitInternal(uint32_t major, uint32_t minor) {
+void Magic::InitInternal(uint32_t major, uint32_t minor, uint32_t buildnum) {
 #if defined(_AMD64_)
 
   if (major == 10) {
-    EProcess_SectionBaseAddress = 0x3c8;
-    EThread_ThreadListEntry = 0x2f8;
+    if (buildnum == 18362) {
+      // 19H1
+      EProcess_SectionBaseAddress = 0x3c8;
+      EThread_ThreadListEntry = 0x6b8;
+    }
+    else if (buildnum == 19041) {
+      // 20H1
+      EProcess_SectionBaseAddress = 0x520;
+      EThread_ThreadListEntry = 0x4e8;
+    }
   }
   else if (major == 6 && minor == 1) {
     EProcess_SectionBaseAddress = 0x270;
@@ -101,7 +109,7 @@ void Magic::InitInternal(uint32_t major,
                          uint32_t minor,
                          uint32_t buildnum,
                          uint32_t revision) {
-  InitInternal(major, minor);
+  InitInternal(major, minor, buildnum);
 
   if (major == 6 && minor == 1 && buildnum == 7601 && revision == 24535) {
     NT_ZwProtectVirtualMemory = 0x915e0;
@@ -145,5 +153,6 @@ void Magic::Init() {
       osinfo.dwMinorVersion,
       osinfo.dwBuildNumber);
   return InitInternal(osinfo.dwMajorVersion,
-                      osinfo.dwMinorVersion);
+                      osinfo.dwMinorVersion,
+                      osinfo.dwBuildNumber);
 }

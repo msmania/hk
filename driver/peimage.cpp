@@ -92,7 +92,7 @@ static bool MakeAreaWritable(HANDLE process, void *start, SIZE_T size) {
 
   ULONG orig;
   NTSTATUS status = ZwProtectVirtualMemory(
-    process, &start, &size, PAGE_WRITECOPY, &orig);
+    process, &start, &size, PAGE_READWRITE, &orig);
   if (!NT_SUCCESS(status)) {
     Log("ZwProtectVirtualMemory failed - %08x\n", status);
     return false;
