@@ -141,9 +141,10 @@ void Callback_LoadImage(PUNICODE_STRING FullImageName,
         && EndsWith(*FullImageName, L"kernel32.dll"));
 
   if (gConfig.mode_ == GlobalConfig::Mode::Trace || do_populate) {
-    Log("LI:  %x.%x %ls\n",
+    Log("LI:  %x.%x %p %ls\n",
         HandleToULong(ProcessId),
         HandleToULong(PsGetCurrentThreadId()),
+        ImageInfo->ImageBase,
         FullImageName->Buffer);
   }
 
