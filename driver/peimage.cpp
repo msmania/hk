@@ -18,7 +18,8 @@ PEImage::PEImage(void* base)
   if (dos.e_magic != MZ) return;
   if (*at<uint32_t*>(base, dos.e_lfanew) != PE) return;
 
-  const auto& fileHeader = *at<PIMAGE_FILE_HEADER>(base, dos.e_lfanew + sizeof(PE));
+  const auto& fileHeader =
+      *at<PIMAGE_FILE_HEADER>(base, dos.e_lfanew + sizeof(PE));
   if (fileHeader.Machine == IMAGE_FILE_MACHINE_AMD64) {
     auto& optHeader = *at<PIMAGE_OPTIONAL_HEADER64>(
       base, dos.e_lfanew + sizeof(PE) + sizeof(IMAGE_FILE_HEADER));
@@ -175,6 +176,8 @@ bool PEImage::UpdateImportDirectoryInternal(HANDLE process) {
   uint32_t rvaToDir;
   if (!GetRvaSafely(base_, &newDir->desc_, rvaToDir))
     return false;
+
+  if (!gConfig.injectee_[0]) return false;
 
   const char *names[NUM_CHUNKS];
   int actualChunks = CopyAndSplit(gConfig.injectee_,

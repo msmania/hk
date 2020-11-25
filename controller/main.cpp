@@ -68,46 +68,46 @@ public:
 
   void GetInfo() const {
     auto payload = Receive();
-    if (payload.flags_) {
-      const auto &config = payload.config_;
-      switch (config.mode_) {
-      default:
-        printf("Not activated\n");
-        break;
-      case GlobalConfig::Mode::Trace:
-        printf("Mode:     Trace\n"
-               "Target:   %hs\n",
-               config.targetProcess_);
-        break;
-      case GlobalConfig::Mode::LI:
-        printf("Mode:     LoadImage\n"
-               "Target:   %ls\n"
-               "Injectee: %hs\n",
-               config.targetImage_,
-               config.injectee_);
-        break;
-      case GlobalConfig::Mode::CP:
-        printf("Mode:     CreateProcess\n"
-               "Target:   %hs\n"
-               "Injectee: %hs\n",
-               config.targetProcess_,
-               config.injectee_);
-        break;
-      case GlobalConfig::Mode::CT:
-        printf("Mode:     CreateThread\n"
-               "Target:   %hs\n"
-               "Injectee: %hs\n",
-               config.targetProcess_,
-               config.injectee_);
-        break;
-      case GlobalConfig::Mode::K32:
-        printf("Mode:     Kernel32\n"
-               "Target:   %hs\n"
-               "Injectee: %hs\n",
-               config.targetProcess_,
-               config.injectee_);
-        break;
-      }
+    if (!payload.flags_) return;
+
+    const auto &config = payload.config_;
+    switch (config.mode_) {
+    default:
+      printf("Not activated\n");
+      break;
+    case GlobalConfig::Mode::Trace:
+      printf("Mode:   Trace\n"
+             "Target: %hs\n",
+             config.targetProcess_);
+      break;
+    case GlobalConfig::Mode::LI:
+      printf("Mode:     LoadImage\n"
+             "Target:   %ls\n"
+             "Injectee: %hs\n",
+             config.targetImage_,
+             config.injectee_);
+      break;
+    case GlobalConfig::Mode::CP:
+      printf("Mode:     CreateProcess\n"
+             "Target:   %hs\n"
+             "Injectee: %hs\n",
+             config.targetProcess_,
+             config.injectee_);
+      break;
+    case GlobalConfig::Mode::CT:
+      printf("Mode:     CreateThread\n"
+             "Target:   %hs\n"
+             "Injectee: %hs\n",
+             config.targetProcess_,
+             config.injectee_);
+      break;
+    case GlobalConfig::Mode::K32:
+      printf("Mode:     Kernel32\n"
+             "Target:   %hs\n"
+             "Injectee: %hs\n",
+             config.targetProcess_,
+             config.injectee_);
+      break;
     }
   }
 
@@ -139,7 +139,8 @@ public:
   }
 
   void SetLI(const char *newTarget) const {
-    Payload payload = {Payload::Mode | Payload::TargetProcess | Payload::TargetImage};
+    Payload payload =
+        {Payload::Mode | Payload::TargetProcess | Payload::TargetImage};
     auto &config = payload.config_;
 
     auto bufferLen = static_cast<uint32_t>(strlen(newTarget) + sizeof(char));

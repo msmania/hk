@@ -77,29 +77,32 @@ void Magic::InitInternal(uint32_t major, uint32_t minor, uint32_t buildnum) {
   if (major == 10) {
     if (buildnum == 18362) {
       // 19H1
-      EProcess_SectionBaseAddress = 0x3c8;
       EThread_ThreadListEntry = 0x6b8;
+      EProcess_SectionBaseAddress = 0x3c8;
     }
-    else if (buildnum == 19041) {
-      // 20H1
-      EProcess_SectionBaseAddress = 0x520;
+    else if (buildnum == 19041 || buildnum == 19042) {
+      // 20H1 & 20H2
       EThread_ThreadListEntry = 0x4e8;
+      EProcess_SectionBaseAddress = 0x520;
     }
   }
   else if (major == 6 && minor == 1) {
-    EProcess_SectionBaseAddress = 0x270;
     EThread_ThreadListEntry = 0x428;
+    EProcess_SectionBaseAddress = 0x270;
   }
 
 #elif defined(_X86_)
 
   if (major == 10) {
-    EProcess_SectionBaseAddress = 0x130;
-    EThread_ThreadListEntry = 0x1d4;
+    if (buildnum == 18363) {
+      // 19H1
+      EThread_ThreadListEntry = 0x3bc;
+      EProcess_SectionBaseAddress = 0x130;
+    }
   }
   else if (major == 6 && minor == 1) {
-    EProcess_SectionBaseAddress = 0x3c8;
     EThread_ThreadListEntry = 0x2f8;
+    EProcess_SectionBaseAddress = 0x3c8;
   }
 
 #endif

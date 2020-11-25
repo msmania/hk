@@ -30,7 +30,9 @@ void Log(const char* format, ...) {
   va_list va;
   va_start(va, format);
   _vsnprintf(message, sizeof(message), format, va);
-  vDbgPrintExWithPrefix("[HK] ", DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL, message, va);
+  vDbgPrintExWithPrefix(
+      "[HK] ",
+      DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL, message, va);
   va_end(va);
 }
 
@@ -55,18 +57,14 @@ static void *GetModuleBaseAddress(const Process &proc, int index) {
   return nullptr;
 }
 
-static void PopulateProcess(HANDLE ProcessId, bool useK32 = false) {
+template <typename CallbackT>
+static void PopulateProcess(HANDLE ProcessId, CallbackT&& Callback) {
   EProcess eproc(ProcessId);
-
   KAPC_STATE state;
   KeStackAttachProcess(eproc, &state);
   {
     Process proc(ProcessId, GENERIC_ALL);
-    PEImage pe(useK32 ? GetModuleBaseAddress(proc, 1)
-                      : eproc.SectionBase());
-    if (pe && proc) {
-      pe.UpdateImportDirectory(proc);
-    }
+    Callback(eproc, proc);
   }
   KeUnstackDetachProcess(&state);
 }
@@ -86,11 +84,14 @@ void Callback_CreateProcess(HANDLE ParentId,
       HandleToULong(ProcessId),
       eproc);
 
-  if (gConfig.mode_ == GlobalConfig::Mode::Trace) return;
+  if (gConfig.mode_ != GlobalConfig::Mode::CP) return;
 
-  if (gConfig.mode_ == GlobalConfig::Mode::CP) {
-    PopulateProcess(ProcessId);
-  }
+  PopulateProcess(ProcessId, [](EProcess& eproc, Process& proc) {
+    PEImage pe(eproc.SectionBase());
+    if (pe && proc) {
+      pe.UpdateImportDirectory(proc);
+    }
+  });
 }
 
 void Callback_CreateThread(HANDLE ProcessId,
@@ -117,11 +118,14 @@ void Callback_CreateThread(HANDLE ProcessId,
       HandleToULong(ThreadId),
       ethread);
 
-  if (gConfig.mode_ == GlobalConfig::Mode::Trace) return;
+  if (gConfig.mode_ != GlobalConfig::Mode::CT) return;
 
-  if (gConfig.mode_ == GlobalConfig::Mode::CT) {
-    PopulateProcess(ProcessId);
-  }
+  PopulateProcess(ProcessId, [](EProcess& eproc, Process& proc) {
+    PEImage pe(eproc.SectionBase());
+    if (pe && proc) {
+      pe.UpdateImportDirectory(proc);
+    }
+  });
 }
 
 bool EndsWith(const UNICODE_STRING &fullString, const wchar_t *leafName);
@@ -148,9 +152,17 @@ void Callback_LoadImage(PUNICODE_STRING FullImageName,
         FullImageName->Buffer);
   }
 
-  if (do_populate) {
-    PopulateProcess(ProcessId, gConfig.mode_ == GlobalConfig::Mode::K32);
-  }
+  if (!do_populate) return;
+
+  PopulateProcess(ProcessId, [](EProcess& eproc, Process& proc) {
+    void *targetBase = gConfig.mode_ == GlobalConfig::Mode::K32
+        ? GetModuleBaseAddress(proc, 1)
+         : eproc.SectionBase();
+    PEImage pe(targetBase);
+    if (pe && proc) {
+      pe.UpdateImportDirectory(proc);
+    }
+  });
 }
 
 NTSTATUS HkDispatchRoutine(PDEVICE_OBJECT DeviceObject, PIRP Irp) {
@@ -219,7 +231,8 @@ NTSTATUS DriverEntry(_In_ PDRIVER_OBJECT DriverObject,
     goto cleanup;
   }
 
-  status = PsSetCreateProcessNotifyRoutine(Callback_CreateProcess, /*Remove*/FALSE);
+  status = PsSetCreateProcessNotifyRoutine(Callback_CreateProcess,
+                                           /*Remove*/FALSE);
   if (!NT_SUCCESS(status)) {
     Log("PsSetCreateProcessNotifyRoutine failed - %08x\n", status);
     goto cleanup;
