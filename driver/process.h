@@ -85,6 +85,13 @@ public:
   operator PKPROCESS();
   const char *ProcessName() const;
   void *SectionBase() const;
+
+  enum CrackHow {
+    JustLooking = 0,
+    ForceDisableImageBaseReuse = 1 << 0,
+    ForceSwitchImagebase = 1 << 1,
+  };
+  bool CrackControlArea(uint32_t how, uintptr_t newimagebase);
 };
 
 class EThread final {

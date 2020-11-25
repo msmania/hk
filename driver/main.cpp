@@ -84,12 +84,23 @@ void Callback_CreateProcess(HANDLE ParentId,
       HandleToULong(ProcessId),
       eproc);
 
-  if (gConfig.mode_ != GlobalConfig::Mode::CP) return;
+  if (gConfig.mode_ != GlobalConfig::Mode::CP
+      && gConfig.mode_ != GlobalConfig::Mode::CCA) return;
 
   PopulateProcess(ProcessId, [](EProcess& eproc, Process& proc) {
-    PEImage pe(eproc.SectionBase());
-    if (pe && proc) {
+    void* original_base = eproc.SectionBase();
+    PEImage pe(original_base);
+    if (!pe || !proc) return;
+
+    if (gConfig.mode_ == GlobalConfig::Mode::CP)
       pe.UpdateImportDirectory(proc);
+    if (gConfig.mode_ == GlobalConfig::Mode::CCA) {
+      // Too lazy to parse the VAD tree to find a valid address.
+      // The odds are for us because the process is almost brand-new.
+      // Cross your fingers..
+      uintptr_t promiseland =
+          reinterpret_cast<uintptr_t>(original_base) - 0x10000;
+      eproc.CrackControlArea(gConfig.option_, promiseland);
     }
   });
 }

@@ -15,6 +15,21 @@ public:
   int EThread_ThreadListEntry;
   int NT_ZwProtectVirtualMemory;
 
+  // Hack Common
+  int EProcess_SectionObject;
+  int Section_ControlArea;
+
+  // Hack1
+  int ControlArea_U2E2;
+  int ControlArea_ImageActive_Bit;
+  int ControlArea_ImageBaseOkToReuse_Bit;
+
+  // Hack2
+  int NT_Context_ReservePtes;
+  int NT_MiReservePtesFunc;
+  int NT_MiReleasePtesFunc;
+  int NT_MiSwitchBaseAddressFunc;
+
   void Init();
 };
 

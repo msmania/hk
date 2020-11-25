@@ -47,6 +47,7 @@ bool ConfigInternal::Import(const void *buffer, uint32_t bufferSize) {
   const auto &payload = *reinterpret_cast<const Payload*>(buffer);
   const auto &config = payload.config_;
 
+  option_ = config.option_;
   if (payload.flags_ & Payload::Mode)
     mode_ = config.mode_;
 

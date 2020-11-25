@@ -71,7 +71,21 @@ PVOID GetKernelBaseAddress() {
   return nullptr;
 }
 
+/*  Friendly cheetsheet <3
+dt nt!_ETHREAD ThreadListEntry
+dt nt!_EPROCESS SectionObject SectionBaseAddress
+dt nt!_SECTION u1.ControlArea
+dt nt!_CONTROL_AREA u2.e2.ImageActive u2.e2.ImageBaseOkToReuse
+? nt!MiReservePtes-nt
+? nt!MiReleasePtes-nt
+? nt!MiSwitchBaseAddress-nt
+!! -ci "uf nt!MiRelocateImageAgain" findstr nt!MiReservePtes
+  * after this, run the "ub" command to find a mysterious number passed
+  * to MiReservePtes which should be something like nt!MiState+0x2680.
+*/
 void Magic::InitInternal(uint32_t major, uint32_t minor, uint32_t buildnum) {
+  EProcess_SectionObject = 0;
+
 #if defined(_AMD64_)
 
   if (major == 10) {
@@ -83,7 +97,29 @@ void Magic::InitInternal(uint32_t major, uint32_t minor, uint32_t buildnum) {
     else if (buildnum == 19041 || buildnum == 19042) {
       // 20H1 & 20H2
       EThread_ThreadListEntry = 0x4e8;
+      EProcess_SectionObject = 0x518;
       EProcess_SectionBaseAddress = 0x520;
+
+      Section_ControlArea = 0x28;
+      ControlArea_U2E2 = 0x5c;
+      ControlArea_ImageActive_Bit = 0x16;
+      ControlArea_ImageBaseOkToReuse_Bit = 0x17;
+
+      // Especially don't trust the following numbers because they depend on
+      // not only a build number but also a patch level.  You should examine
+      // your kernel yourself, otherwise you will hit BSOD.  :P
+      if (buildnum == 19041) {
+        NT_MiReservePtesFunc = 0x3276e0;
+        NT_MiReleasePtesFunc = 0x2c27f0;
+        NT_MiSwitchBaseAddressFunc = 0x60a130;
+        NT_Context_ReservePtes = 0xc4edc0;
+      }
+      else if (buildnum == 19042) {
+        NT_MiReservePtesFunc = 0x32b250;
+        NT_MiReleasePtesFunc = 0x2c26b0;
+        NT_MiSwitchBaseAddressFunc = 0x60a130;
+        NT_Context_ReservePtes = 0xc4ee00;
+      }
     }
   }
   else if (major == 6 && minor == 1) {

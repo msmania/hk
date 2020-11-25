@@ -108,6 +108,13 @@ public:
              config.targetProcess_,
              config.injectee_);
       break;
+    case GlobalConfig::Mode::CCA:
+      printf("Mode:   CrackControlArea.%d\n"
+             "Target: %hs\n",
+             config.option_,
+             config.targetProcess_
+             );
+      break;
     }
   }
 
@@ -124,7 +131,9 @@ public:
     Send(payload);
   }
 
-  void SetHookForProcess(const char *newTarget, GlobalConfig::Mode mode) const {
+  void SetHookForProcess(const char *newTarget,
+                         GlobalConfig::Mode mode,
+                         uint32_t option = 0) const {
     Payload payload = {Payload::Mode | Payload::TargetProcess};
     auto &config = payload.config_;
 
@@ -133,6 +142,7 @@ public:
       return;
 
     config.mode_ = mode;
+    config.option_ = option;
     memcpy(config.targetProcess_, newTarget, bufferLen);
 
     Send(payload);
@@ -180,9 +190,10 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  enum {uninitialized, info, inject, trace, li, cp, ct, k32}
+  enum {uninitialized, info, inject, trace, li, cp, ct, k32, cca}
     command = uninitialized;
   const char *target = nullptr;
+  uint32_t option = 0;
 
   if (strcmp(argv[1], "--info") == 0)
     command = info;
@@ -200,6 +211,10 @@ int main(int argc, char *argv[]) {
       command = ct;
     else if (strcmp(argv[1], "--k32") == 0)
       command = k32;
+    else if (strcmp(argv[1], "--donttrythis") == 0) {
+      command = cca;
+      if (argc >= 4) option = atoi(argv[3]);
+    }
   }
 
   if (command != uninitialized) {
@@ -220,6 +235,10 @@ int main(int argc, char *argv[]) {
           break;
         case k32:
           driver.SetHookForProcess(target, GlobalConfig::Mode::K32);
+          break;
+        case cca:
+          driver.SetHookForProcess(
+              target, GlobalConfig::Mode::CCA, option);
           break;
       }
     }
