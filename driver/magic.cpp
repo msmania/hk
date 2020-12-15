@@ -89,7 +89,7 @@ void Magic::InitInternal(uint32_t major, uint32_t minor, uint32_t buildnum) {
 #if defined(_AMD64_)
 
   if (major == 10) {
-    if (buildnum == 18362) {
+    if (buildnum == 18362 || buildnum == 18363) {
       // 19H1
       EThread_ThreadListEntry = 0x6b8;
       EProcess_SectionBaseAddress = 0x3c8;
@@ -115,10 +115,10 @@ void Magic::InitInternal(uint32_t major, uint32_t minor, uint32_t buildnum) {
         NT_Context_ReservePtes = 0xc4edc0;
       }
       else if (buildnum == 19042) {
-        NT_MiReservePtesFunc = 0x32b250;
-        NT_MiReleasePtesFunc = 0x2c26b0;
-        NT_MiSwitchBaseAddressFunc = 0x60a130;
-        NT_Context_ReservePtes = 0xc4ee00;
+        NT_MiReservePtesFunc = 0x2743a0;
+        NT_MiReleasePtesFunc = 0x247f40;
+        NT_MiSwitchBaseAddressFunc = 0x6d908c;
+        NT_Context_ReservePtes = 0xc4ed40;
       }
     }
   }
@@ -158,7 +158,7 @@ void Magic::InitInternal(uint32_t major,
 void Magic::Init() {
   KernelBaseAddress = GetKernelBaseAddress();
   NT_ZwProtectVirtualMemory = 0;
-
+#if 0
   do {
     if (!KernelBaseAddress) break;
 
@@ -180,7 +180,7 @@ void Magic::Init() {
                  LOWORD(ver.dwProductVersionLS));
     return;
   } while (0);
-
+#endif
   RTL_OSVERSIONINFOW osinfo = {sizeof(osinfo)};
   NTSTATUS status = RtlGetVersion(&osinfo);
   if (!NT_SUCCESS(status))  {
