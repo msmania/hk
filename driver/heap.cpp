@@ -7,7 +7,8 @@
 constexpr int kRegionAllocationTryLimit = 4000;
 constexpr uintptr_t kMinimumAllocationPoint = 0x8000000;
 
-Heap::Heap(HANDLE process, PVOID desiredBase, SIZE_T size) : process_(process), base_{} {
+Heap::Heap(HANDLE process, PVOID desiredBase, SIZE_T size)
+    : process_(process), base_{}, size_{} {
   if (reinterpret_cast<uintptr_t>(desiredBase) < kMinimumAllocationPoint)
     desiredBase = reinterpret_cast<PVOID>(kMinimumAllocationPoint);
 
@@ -30,6 +31,7 @@ Heap::Heap(HANDLE process, PVOID desiredBase, SIZE_T size) : process_(process), 
     }
 
     base_ = desiredBase;
+    size_ = size;
     //Log("Allocated: %p\n", desiredBase);
     return;
   }
@@ -52,9 +54,14 @@ Heap::operator void*() {
   return base_;
 }
 
+SIZE_T Heap::Size() const {
+  return size_;
+}
+
 void* Heap::Detach() {
   auto base = base_;
   base_ = nullptr;
+  size_ = 0;
   return base;
 }
 

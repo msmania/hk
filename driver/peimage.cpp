@@ -7,46 +7,19 @@
 #include "magic.h"
 #include "peimage.h"
 
-PEImage::PEImage(void* base)
-    : arch_(CPU::unknown), base_{}, directories_{} {
-  constexpr uint16_t MZ = 0x5a4d;
-  constexpr uint32_t PE = 0x4550;
-  constexpr uint16_t PE32 = 0x10b;
-  constexpr uint16_t PE32PLUS = 0x20b;
+#define IS_INTRESOURCE(_r) ((((uintptr_t)(_r)) >> 16) == 0)
+#define MAKEINTRESOURCEW(i) ((wchar_t*)((uintptr_t)((uint16_t)(i))))
+#define RT_VERSION MAKEINTRESOURCEW(16)
 
-  const auto& dos = *at<PIMAGE_DOS_HEADER>(base, 0);
-  if (dos.e_magic != MZ) return;
-  if (*at<uint32_t*>(base, dos.e_lfanew) != PE) return;
+int CopyAndSplit(const char *src,
+                 char *dst,
+                 const char *chunks[],
+                 int lenChunks,
+                 char delim = '|');
 
-  const auto& fileHeader =
-      *at<PIMAGE_FILE_HEADER>(base, dos.e_lfanew + sizeof(PE));
-  if (fileHeader.Machine == IMAGE_FILE_MACHINE_AMD64) {
-    auto& optHeader = *at<PIMAGE_OPTIONAL_HEADER64>(
-      base, dos.e_lfanew + sizeof(PE) + sizeof(IMAGE_FILE_HEADER));
-    if (optHeader.Magic != PE32PLUS) return;
+namespace {
 
-    arch_ = CPU::amd64;
-    base_ = at<uint8_t*>(base, 0);
-    directories_ = optHeader.DataDirectory;
-    entrypoint_ = optHeader.AddressOfEntryPoint;
-  }
-  else if (fileHeader.Machine == IMAGE_FILE_MACHINE_I386) {
-    auto& optHeader = *at<PIMAGE_OPTIONAL_HEADER32>(
-      base, dos.e_lfanew + sizeof(PE) + sizeof(IMAGE_FILE_HEADER));
-    if (optHeader.Magic != PE32) return;
-
-    arch_ = CPU::x86;
-    base_ = at<uint8_t*>(base, 0);
-    directories_ = optHeader.DataDirectory;
-    entrypoint_ = optHeader.AddressOfEntryPoint;
-  }
-}
-
-PEImage::operator bool() const {
-  return !!base_;
-}
-
-static bool GetRvaSafely(const void *base, const void *target, uint32_t &rva) {
+bool GetRvaSafely(const void *base, const void *target, uint32_t &rva) {
   rva = 0;
   int64_t rvaTry =
     reinterpret_cast<const uint8_t*>(target)
@@ -57,7 +30,7 @@ static bool GetRvaSafely(const void *base, const void *target, uint32_t &rva) {
   return true;
 }
 
-static bool IsMemoryPageWritable(HANDLE process, void *page) {
+bool IsMemoryPageWritable(HANDLE process, void *page) {
   MEMORY_BASIC_INFORMATION info{};
   SIZE_T len;
   NTSTATUS status = ZwQueryVirtualMemory(
@@ -71,7 +44,7 @@ static bool IsMemoryPageWritable(HANDLE process, void *page) {
   return info.Protect == PAGE_READWRITE || info.Protect == PAGE_WRITECOPY;
 }
 
-static bool MakeAreaWritable(HANDLE process, void *start, SIZE_T size) {
+bool MakeAreaWritable(HANDLE process, void *start, SIZE_T size) {
   if (IsMemoryPageWritable(process, start)) return true;
 
   UNICODE_STRING name;
@@ -102,65 +75,63 @@ static bool MakeAreaWritable(HANDLE process, void *start, SIZE_T size) {
   return true;
 }
 
-namespace {
-  template <typename T>
-  struct Thunk {
-    T names_[2];
-    T functions_[2];
+template <typename T>
+struct Thunk {
+  T names_[2];
+  T functions_[2];
 
-    Thunk() = delete;
+  Thunk() = delete;
 
-    void Populate(T value) {
-      names_[0] = functions_[0] = value;
-      names_[1] = functions_[1] = 0;
-    }
-  };
+  void Populate(T value) {
+    names_[0] = functions_[0] = value;
+    names_[1] = functions_[1] = 0;
+  }
+};
 
-  struct ImportDescriptor : IMAGE_IMPORT_DESCRIPTOR {
-    ImportDescriptor() = delete;
+struct ImportDescriptor : hk::IMAGE_IMPORT_DESCRIPTOR {
+  ImportDescriptor() = delete;
 
-    template <typename ThunkT>
-    bool Populate(uint8_t *base, const char *name, const ThunkT &thunk) {
-      uint32_t rvaToName, rvaToNameArray, rvaToFuncArray;
-      if (!GetRvaSafely(base, name, rvaToName)
-          || !GetRvaSafely(base, thunk.names_, rvaToNameArray)
-          || !GetRvaSafely(base, thunk.functions_, rvaToFuncArray))
-        return false;
+  template <typename ThunkT>
+  bool Populate(uint8_t *base, const char *name, const ThunkT &thunk) {
+    uint32_t rvaToName, rvaToNameArray, rvaToFuncArray;
+    if (!GetRvaSafely(base, name, rvaToName)
+        || !GetRvaSafely(base, thunk.names_, rvaToNameArray)
+        || !GetRvaSafely(base, thunk.functions_, rvaToFuncArray))
+      return false;
 
-      OriginalFirstThunk = rvaToNameArray;
-      TimeDateStamp = ForwarderChain = 0;
-      Name = rvaToName;
-      FirstThunk = rvaToFuncArray;
-      return true;
-    }
-  };
+    OriginalFirstThunk = rvaToNameArray;
+    TimeDateStamp = ForwarderChain = 0;
+    Name = rvaToName;
+    FirstThunk = rvaToFuncArray;
+    return true;
+  }
+};
 
-  constexpr int NUM_CHUNKS = 3;
+constexpr int NUM_CHUNKS = 3;
 
-  struct NewImportDirectory64 final {
-    constexpr static uint64_t OrdinalFlag = IMAGE_ORDINAL_FLAG64;
-    char name_[sizeof(GlobalConfig::injectee_)];
-    Thunk<uint64_t> thunks_[NUM_CHUNKS];
-    ImportDescriptor desc_[NUM_CHUNKS];
+struct NewImportDirectory64 final {
+  constexpr static uint64_t OrdinalFlag = hk::ORDINAL_FLAG64;
+  char name_[sizeof(GlobalConfig::injectee_)];
+  Thunk<uint64_t> thunks_[NUM_CHUNKS];
+  ImportDescriptor desc_[NUM_CHUNKS];
 
-    NewImportDirectory64() = delete;
-  };
+  NewImportDirectory64() = delete;
+};
 
-  struct NewImportDirectory32 final {
-    constexpr static uint32_t OrdinalFlag = IMAGE_ORDINAL_FLAG32;
-    char name_[sizeof(GlobalConfig::injectee_)];
-    Thunk<uint32_t> thunks_[NUM_CHUNKS];
-    ImportDescriptor desc_[NUM_CHUNKS];
+struct NewImportDirectory32 final {
+  constexpr static uint32_t OrdinalFlag = hk::ORDINAL_FLAG32;
+  char name_[sizeof(GlobalConfig::injectee_)];
+  Thunk<uint32_t> thunks_[NUM_CHUNKS];
+  ImportDescriptor desc_[NUM_CHUNKS];
 
-    NewImportDirectory32() = delete;
-  };
+  NewImportDirectory32() = delete;
+};
+
 }
 
-int CopyAndSplit(const char *src,
-                 char *dst,
-                 const char *chunks[],
-                 int lenChunks,
-                 char delim = '|');
+namespace hk {
+
+PEImage::PEImage(void* base) : PEImageBase(base) {}
 
 template<typename NewImportDirectory>
 bool PEImage::UpdateImportDirectoryInternal(HANDLE process) {
@@ -168,10 +139,13 @@ bool PEImage::UpdateImportDirectoryInternal(HANDLE process) {
 
   Heap heap(process, base_,
             sizeof(NewImportDirectory)
-              + directories_[IMAGE_DIRECTORY_ENTRY_IMPORT].Size);
+              + directories_[IMAGE_DIRECTORY::IMPORT].Size
+              + sizeof(BackupDirectory));
   if (!heap) return false;
 
   auto newDir = at<NewImportDirectory*>(heap, 0);
+  auto origDir = at<BackupDirectory*>(
+      heap, heap.Size() - sizeof(BackupDirectory));
 
   uint32_t rvaToDir;
   if (!GetRvaSafely(base_, &newDir->desc_, rvaToDir))
@@ -194,23 +168,25 @@ bool PEImage::UpdateImportDirectoryInternal(HANDLE process) {
   }
 
   uint32_t rvaOriginal =
-    directories_[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress;
+    directories_[IMAGE_DIRECTORY::IMPORT].VirtualAddress;
 
-  auto targetEntry = &directories_[IMAGE_DIRECTORY_ENTRY_IMPORT];
-
+  auto targetEntry = &directories_[IMAGE_DIRECTORY::IMPORT];
   if (!MakeAreaWritable(process, targetEntry, sizeof(*targetEntry)))
     return false;
 
+  origDir->magic_ = BackupDirectory::sMagic;
+  origDir->va_ = targetEntry->VirtualAddress;
+  origDir->size_ = targetEntry->Size;
   targetEntry->VirtualAddress = rvaToDir;
   targetEntry->Size += sizeof(IMAGE_IMPORT_DESCRIPTOR);
   Log("*(%p) = %08x -> %08x\n", targetEntry, rvaOriginal, rvaToDir);
 
   memcpy(&newDir->desc_[actualChunks],
          at<const void*>(base_, rvaOriginal),
-         directories_[IMAGE_DIRECTORY_ENTRY_IMPORT].Size);
+         directories_[IMAGE_DIRECTORY::IMPORT].Size);
 
   // Clear the Bound Import Directory
-  targetEntry = &directories_[IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT];
+  targetEntry = &directories_[IMAGE_DIRECTORY::BOUND_IMPORT];
   if ((targetEntry->VirtualAddress || targetEntry->Size)
       && MakeAreaWritable(process, targetEntry, sizeof(*targetEntry))) {
     targetEntry->VirtualAddress = targetEntry->Size = 0;
@@ -237,14 +213,14 @@ void PEImage::DumpImportTable() const {
 
   const auto
     dir_start = at<uint8_t*>(
-      base_, directories_[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress),
-    dir_end = dir_start + directories_[IMAGE_DIRECTORY_ENTRY_IMPORT].Size;
+      base_, directories_[IMAGE_DIRECTORY::IMPORT].VirtualAddress),
+    dir_end = dir_start + directories_[IMAGE_DIRECTORY::IMPORT].Size;
 
   int index_desc = 0;
   for (uint8_t* desc_raw = dir_start;
        desc_raw < dir_end;
        desc_raw += sizeof(IMAGE_IMPORT_DESCRIPTOR), ++index_desc) {
-    const auto& desc = *at<PIMAGE_IMPORT_DESCRIPTOR>(desc_raw, 0);
+    const auto& desc = *at<IMAGE_IMPORT_DESCRIPTOR*>(desc_raw, 0);
     if (!desc.Characteristics) break;
     Log("%d: %p %s\n",
         index_desc, desc_raw, at<const char*>(base_, desc.Name));
@@ -369,7 +345,7 @@ VS_FIXEDFILEINFO PEImage::GetVersion() const {
 
   const auto
     dir_start = at<uint8_t*>(
-      base_, directories_[IMAGE_DIRECTORY_ENTRY_RESOURCE].VirtualAddress);
+      base_, directories_[IMAGE_DIRECTORY::RESOURCE].VirtualAddress);
 
   // In 32bit kernel, Resource section is not accessible.
   if (!MmIsAddressValid(dir_start)) {
@@ -408,4 +384,6 @@ VS_FIXEDFILEINFO PEImage::GetVersion() const {
     });
 
   return context.version_;
+}
+
 }

@@ -45,3 +45,10 @@ struct Payload {
   uint32_t flags_;
   GlobalConfig config_;
 };
+
+struct BackupDirectory {
+  constexpr static uint32_t sMagic = 0xabcdef88;
+  uint32_t magic_;
+  uint32_t va_;
+  uint32_t size_;
+};

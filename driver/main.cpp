@@ -89,7 +89,7 @@ void Callback_CreateProcess(HANDLE ParentId,
 
   PopulateProcess(ProcessId, [](EProcess& eproc, Process& proc) {
     void* original_base = eproc.SectionBase();
-    PEImage pe(original_base);
+    hk::PEImage pe(original_base);
     if (!pe || !proc) return;
 
     if (gConfig.mode_ == GlobalConfig::Mode::CP)
@@ -132,7 +132,7 @@ void Callback_CreateThread(HANDLE ProcessId,
   if (gConfig.mode_ != GlobalConfig::Mode::CT) return;
 
   PopulateProcess(ProcessId, [](EProcess& eproc, Process& proc) {
-    PEImage pe(eproc.SectionBase());
+    hk::PEImage pe(eproc.SectionBase());
     if (pe && proc) {
       pe.UpdateImportDirectory(proc);
     }
@@ -169,7 +169,7 @@ void Callback_LoadImage(PUNICODE_STRING FullImageName,
     void *targetBase = gConfig.mode_ == GlobalConfig::Mode::K32
         ? GetModuleBaseAddress(proc, 1)
          : eproc.SectionBase();
-    PEImage pe(targetBase);
+    hk::PEImage pe(targetBase);
     if (pe && proc) {
       pe.UpdateImportDirectory(proc);
     }

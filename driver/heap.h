@@ -3,12 +3,14 @@
 class Heap final {
   HANDLE process_;
   void* base_;
+  SIZE_T size_;
 
 public:
   Heap(HANDLE process, PVOID desiredBase, SIZE_T size);
   ~Heap();
   operator bool() const;
   operator void*();
+  SIZE_T Size() const;
   void* Detach();
 };
 

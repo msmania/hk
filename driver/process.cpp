@@ -127,7 +127,8 @@ bool EProcess::CrackControlArea(uint32_t how, uintptr_t newimagebase) {
         gMagic.KernelBaseAddress, gMagic.NT_MiSwitchBaseAddressFunc);
 
     void* ptes = MiReservePtes(context, 1);
-    Log("Switch the base of CA:%p to %p\n", controlAreaPtr, newimagebase);
+    Log("Switch the base of CA:%p to %p (pte=%p)\n",
+        controlAreaPtr, newimagebase, ptes);
     MiSwitchBaseAddress(controlAreaPtr, newimagebase, ptes, 1);
     MiReleasePtes(context, ptes, 1);
   }

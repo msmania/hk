@@ -4,7 +4,6 @@
 #include "common.h"
 #include "heap.h"
 #include "magic.h"
-#include "peimage.h"
 
 #define HIWORD(dw) static_cast<uint16_t>(static_cast<uint32_t>(dw) >> 16)
 #define LOWORD(dw) static_cast<uint16_t>(static_cast<uint32_t>(dw) & 0xffff)
